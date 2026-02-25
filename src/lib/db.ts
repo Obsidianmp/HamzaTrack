@@ -11,13 +11,16 @@ import type {
 } from "@/types/time-tracker";
 
 const DATA_DIR = path.join(process.cwd(), "data");
+const RUNTIME_DATA_DIR = process.env.VERCEL
+  ? path.join("/tmp", "contractor-time-tracker-data")
+  : DATA_DIR;
 const SEED_PATH = path.join(DATA_DIR, "db.json");
-const LOCAL_PATH = path.join(DATA_DIR, "db.local.json");
+const LOCAL_PATH = path.join(RUNTIME_DATA_DIR, "db.local.json");
 
 let writeQueue: Promise<void> = Promise.resolve();
 
 async function ensureLocalDb() {
-  await mkdir(DATA_DIR, { recursive: true });
+  await mkdir(RUNTIME_DATA_DIR, { recursive: true });
 
   try {
     await access(LOCAL_PATH);
