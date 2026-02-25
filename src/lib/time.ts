@@ -1,5 +1,6 @@
 import type {
   Contract,
+  DailyBucket,
   DateRange,
   MonthlyBucket,
   PeriodPreset,
@@ -241,6 +242,11 @@ function monthKeyInTimezone(date: Date, timezone: string) {
   return `${parts.year}-${String(parts.month).padStart(2, "0")}`;
 }
 
+function dayKeyInTimezone(date: Date, timezone: string) {
+  const parts = getZonedParts(date, timezone);
+  return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+}
+
 export function buildMonthlyBuckets(
   entries: TimeEntry[],
   timezone: string,
@@ -294,6 +300,51 @@ export function buildMonthlyBuckets(
   }
 
   return Array.from(buckets.values()).sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+}
+
+function nextDayBoundaryUtc(date: Date, timezone: string) {
+  const parts = getZonedParts(date, timezone);
+  const next = addDaysYmd(parts.year, parts.month, parts.day, 1);
+  return zonedDateTimeToUtc(timezone, { ...next, hour: 0, minute: 0, second: 0 });
+}
+
+export function buildDailyBucketsForRange(
+  entries: TimeEntry[],
+  range: DateRange,
+  timezone: string
+): DailyBucket[] {
+  const buckets = new Map<string, DailyBucket>();
+  const rangeStart = new Date(range.startUtc);
+  const rangeEnd = new Date(range.endUtc);
+
+  for (const entry of entries) {
+    const segmentStartMs = Math.max(new Date(entry.startAtUtc).getTime(), rangeStart.getTime());
+    const segmentEndMs = Math.min(new Date(entry.endAtUtc).getTime(), rangeEnd.getTime());
+    if (segmentEndMs <= segmentStartMs) continue;
+
+    let cursor = new Date(segmentStartMs);
+    const end = new Date(segmentEndMs);
+    while (cursor < end) {
+      const key = dayKeyInTimezone(cursor, timezone);
+      const boundary = nextDayBoundaryUtc(cursor, timezone);
+      const segmentEnd = boundary < end ? boundary : end;
+      const minutes = Math.floor((segmentEnd.getTime() - cursor.getTime()) / 60_000);
+      if (minutes > 0) {
+        const existing = buckets.get(key) ?? {
+          dayKey: key,
+          totalMinutes: 0,
+          totalAmount: 0
+        };
+        existing.totalMinutes += minutes;
+        existing.totalAmount = roundMoney(existing.totalAmount + calculateAmount(minutes, entry.rateSnapshot));
+        buckets.set(key, existing);
+      }
+      if (segmentEnd.getTime() <= cursor.getTime()) break;
+      cursor = segmentEnd;
+    }
+  }
+
+  return Array.from(buckets.values()).sort((a, b) => b.dayKey.localeCompare(a.dayKey));
 }
 
 export function roundTo2(value: number) {

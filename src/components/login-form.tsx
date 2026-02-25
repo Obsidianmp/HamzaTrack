@@ -9,8 +9,12 @@ export function LoginForm() {
   const router = useRouter();
   const [session, setSession] = useState<SessionResponse | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [pending, startTransition] = useTransition();
+
+  const selectedUser = session?.users.find((user) => user.id === selectedUserId) ?? null;
+  const requiresAdminPassword = selectedUser?.role === "admin";
 
   useEffect(() => {
     void getJson<SessionResponse>("/api/session")
@@ -28,7 +32,10 @@ export function LoginForm() {
       try {
         await getJson("/api/login", {
           method: "POST",
-          body: JSON.stringify({ userId: selectedUserId })
+          body: JSON.stringify({
+            userId: selectedUserId,
+            password: requiresAdminPassword ? password : undefined
+          })
         });
         router.refresh();
         router.push("/");
@@ -67,19 +74,42 @@ export function LoginForm() {
               </select>
             </div>
 
+            {requiresAdminPassword ? (
+              <div className="field">
+                <label htmlFor="password">Administrator Password</label>
+                <input
+                  id="password"
+                  type="password"
+                  className="input"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter admin password"
+                  autoComplete="current-password"
+                  required
+                />
+              </div>
+            ) : null}
+
             {error ? <div className="error">{error}</div> : null}
 
-            <button className="btn primary" type="submit" disabled={!selectedUserId || pending}>
+            <button
+              className="btn primary"
+              type="submit"
+              disabled={!selectedUserId || pending || (requiresAdminPassword && !password)}
+            >
               {pending ? "Signing in..." : "Continue"}
             </button>
           </form>
 
-          <div className="panel pad" style={{ background: "#fcfcfd" }}>
+          <div className="panel pad login-footnote">
             <div className="muted" style={{ fontSize: 14 }}>
               Seeded accounts:
             </div>
             <div style={{ fontSize: 14, marginTop: 6 }}>
               `admin@example.com` (admin), `contractor@example.com` (contractor)
+            </div>
+            <div className="muted" style={{ fontSize: 13, marginTop: 6 }}>
+              Admin login now requires a password.
             </div>
           </div>
         </div>

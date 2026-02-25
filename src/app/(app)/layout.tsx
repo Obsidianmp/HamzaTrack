@@ -1,7 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { AppNavLinks } from "@/components/app-nav-links";
 import { LogoutButton } from "@/components/logout-button";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { getSessionUser } from "@/lib/auth";
 
 export default async function AppLayout({
@@ -31,15 +32,12 @@ export default async function AppLayout({
                 {user.name} ({user.role})
               </div>
             </div>
-            <nav className="nav-links">
-              {links.map((link) => (
-                <Link key={link.href} href={link.href} className="nav-link">
-                  {link.label}
-                </Link>
-              ))}
-            </nav>
+            <AppNavLinks links={links} />
           </div>
-          <LogoutButton />
+          <div className="row">
+            <ThemeToggle />
+            <LogoutButton />
+          </div>
         </div>
       </header>
       <main className="container" style={{ paddingTop: "1rem", paddingBottom: "2rem" }}>

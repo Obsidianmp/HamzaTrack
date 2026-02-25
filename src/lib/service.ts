@@ -10,6 +10,7 @@ import type {
 import { appendAuditLog, createId, nowUtcIso, readDb, sortEntriesDesc, updateDb } from "@/lib/db";
 import {
   applyContractToEntryDraft,
+  buildDailyBucketsForRange,
   buildMonthlyBuckets,
   buildTotalsForRange,
   clampRange,
@@ -76,6 +77,7 @@ export async function loadDashboard(
   const inRangeEntries = sortEntriesDesc(filterEntriesByRange(baseEntries, range));
   const totals = buildTotalsForRange(baseEntries, range);
   const monthlyBuckets = buildMonthlyBuckets(baseEntries, timezone, 6);
+  const dailyBuckets = buildDailyBucketsForRange(baseEntries, range, timezone);
   const activeTimer =
     currentUser.role === "admin"
       ? getActiveTimerForUser(db, contractor.id)
@@ -100,7 +102,8 @@ export async function loadDashboard(
             .sort((a, b) => b.timestampUtc.localeCompare(a.timestampUtc))
             .slice(0, 100)
         : [],
-    monthlyBuckets
+    monthlyBuckets,
+    dailyBuckets
   };
 }
 
@@ -248,6 +251,76 @@ export async function updateEntry(
       metadata: {
         before: oldEntry,
         after: entry
+      }
+    });
+
+    return entry;
+  });
+}
+
+export async function createManualEntry(
+  currentUser: User,
+  payload: { startAtUtc?: string; endAtUtc?: string; notes?: string }
+) {
+  if (currentUser.role !== "admin") {
+    throw new Error("Only admin can create manual entries");
+  }
+
+  const startAtUtc = payload.startAtUtc;
+  const endAtUtc = payload.endAtUtc;
+  if (!startAtUtc || !endAtUtc) {
+    throw new Error("startAtUtc and endAtUtc are required");
+  }
+
+  return updateDb((db) => {
+    const contractor = getDefaultContractor(db);
+    const contract = getContractForUser(db, contractor.id);
+
+    if (new Date(endAtUtc).getTime() <= new Date(startAtUtc).getTime()) {
+      throw new Error("End time must be after start time");
+    }
+
+    if (hasOverlappingEntry(db.timeEntries, contractor.id, startAtUtc, endAtUtc)) {
+      throw new Error("Manual entry overlaps an existing entry");
+    }
+
+    const active = getActiveTimerForUser(db, contractor.id);
+    if (active) {
+      const activeStart = new Date(active.startedAtUtc).getTime();
+      const startMs = new Date(startAtUtc).getTime();
+      const endMs = new Date(endAtUtc).getTime();
+      if (startMs < Date.now() && endMs > activeStart) {
+        throw new Error("Manual entry overlaps the active timer");
+      }
+    }
+
+    const nowUtc = nowUtcIso();
+    const billing = applyContractToEntryDraft(contract, startAtUtc, endAtUtc);
+    const entry: TimeEntry = {
+      id: createId("entry"),
+      userId: contractor.id,
+      startAtUtc,
+      endAtUtc,
+      ...billing,
+      notes: payload.notes?.trim() ?? "",
+      source: "manual",
+      edited: false,
+      createdAtUtc: nowUtc,
+      updatedAtUtc: nowUtc
+    };
+    db.timeEntries.push(entry);
+
+    appendAuditLog(db, {
+      actorId: currentUser.id,
+      action: "entry_create",
+      targetType: "entry",
+      targetId: entry.id,
+      metadata: {
+        source: "manual",
+        startAtUtc,
+        endAtUtc,
+        durationMinutes: entry.durationMinutes,
+        amount: entry.amount
       }
     });
 

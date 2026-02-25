@@ -84,6 +84,7 @@ export function EntriesTable({
               <th>Rate</th>
               <th>Amount</th>
               <th>Notes</th>
+              <th>Source</th>
               <th>Status</th>
               {editable ? <th>Actions</th> : null}
             </tr>
@@ -91,7 +92,7 @@ export function EntriesTable({
           <tbody>
             {entries.length === 0 ? (
               <tr>
-                <td colSpan={editable ? 8 : 7} className="muted">
+                <td colSpan={editable ? 9 : 8} className="muted">
                   No entries in this range yet.
                 </td>
               </tr>
@@ -142,6 +143,9 @@ export function EntriesTable({
                     ) : (
                       entry.notes || <span className="muted">-</span>
                     )}
+                  </td>
+                  <td>
+                    <span className="pill">{entry.source === "manual" ? "manual" : "timer"}</span>
                   </td>
                   <td>
                     {entry.edited ? <span className="pill warn">Edited</span> : <span className="pill">Saved</span>}

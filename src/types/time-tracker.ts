@@ -5,6 +5,7 @@ export type AuditAction =
   | "logout"
   | "timer_start"
   | "timer_stop"
+  | "entry_create"
   | "entry_edit"
   | "settings_update"
   | "seed_data";
@@ -91,6 +92,12 @@ export interface MonthlyBucket {
   totalAmount: number;
 }
 
+export interface DailyBucket {
+  dayKey: string;
+  totalMinutes: number;
+  totalAmount: number;
+}
+
 export interface DashboardResponse {
   currentUser: User;
   contractor: User;
@@ -101,4 +108,5 @@ export interface DashboardResponse {
   entries: TimeEntry[];
   auditLogs: AuditLog[];
   monthlyBuckets: MonthlyBucket[];
+  dailyBuckets: DailyBucket[];
 }

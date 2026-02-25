@@ -5,8 +5,10 @@ import { useEffect, useMemo, useState } from "react";
 import { dashboardUrl, getJson } from "@/lib/client-api";
 import { entriesToCsv } from "@/lib/csv";
 import { formatCurrency, formatDateTime } from "@/lib/format";
+import { formatDuration } from "@/lib/time";
 import type { DashboardResponse, PeriodPreset } from "@/types/time-tracker";
 import { EntriesTable } from "@/components/entries-table";
+import { ManualEntryForm } from "@/components/manual-entry-form";
 import { PeriodTabs } from "@/components/period-tabs";
 import { SummaryCards } from "@/components/summary-cards";
 
@@ -132,6 +134,53 @@ export function AdminDashboard() {
         </section>
 
         <section className="stack">
+          {data ? (
+            <div className="panel pad stack">
+              <ManualEntryForm
+                hourlyRate={data.contract.hourlyRate}
+                currency={currency}
+                onCreated={() => refreshDashboard(preset)}
+              />
+            </div>
+          ) : null}
+
+          <div className="panel pad stack">
+            <div>
+              <h2 className="subheading">Daily Totals ({preset.toUpperCase()})</h2>
+              <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
+                Day-by-day billable totals for quick corrections and checks
+              </div>
+            </div>
+            <div className="table-wrap">
+              <table style={{ minWidth: 0 }}>
+                <thead>
+                  <tr>
+                    <th>Day</th>
+                    <th>Time</th>
+                    <th>Billable</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data?.dailyBuckets.length ? (
+                    data.dailyBuckets.slice(0, 31).map((bucket) => (
+                      <tr key={bucket.dayKey}>
+                        <td>{bucket.dayKey}</td>
+                        <td>{formatDuration(bucket.totalMinutes)}</td>
+                        <td>{formatCurrency(bucket.totalAmount, currency)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={3} className="muted">
+                        No day totals yet for this range.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <div className="panel pad stack">
             <div>
               <h2 className="subheading">Monthly Trend (last 6)</h2>

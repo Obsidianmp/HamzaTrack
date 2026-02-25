@@ -28,34 +28,6 @@
     "defaultContractorUserId": "contractor-1"
   },
   "activeTimers": [],
-  "timeEntries": [
-    {
-      "id": "entry-seed-1",
-      "userId": "contractor-1",
-      "startAtUtc": "2026-02-24T01:00:00.000Z",
-      "endAtUtc": "2026-02-24T03:15:00.000Z",
-      "durationMinutes": 135,
-      "rateSnapshot": 18,
-      "currency": "USD",
-      "amount": 40.5,
-      "notes": "Seed example",
-      "source": "seed",
-      "edited": false,
-      "createdAtUtc": "2026-02-24T03:16:00.000Z",
-      "updatedAtUtc": "2026-02-24T03:16:00.000Z"
-    }
-  ],
-  "auditLogs": [
-    {
-      "id": "audit-seed-1",
-      "actorId": "admin-1",
-      "action": "seed_data",
-      "targetType": "system",
-      "targetId": "db",
-      "timestampUtc": "2026-02-24T03:16:00.000Z",
-      "metadata": {
-        "message": "Seed data initialized"
-      }
-    }
-  ]
+  "timeEntries": [],
+  "auditLogs": []
 }
