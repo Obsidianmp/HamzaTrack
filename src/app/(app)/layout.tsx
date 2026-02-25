@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { AppNavLinks } from "@/components/app-nav-links";
+import { Brand } from "@/components/brand";
 import { LogoutButton } from "@/components/logout-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { getSessionUser } from "@/lib/auth";
@@ -26,12 +27,7 @@ export default async function AppLayout({
       <header className="nav">
         <div className="nav-inner">
           <div className="row" style={{ gap: "1rem" }}>
-            <div>
-              <div style={{ fontWeight: 700 }}>Time Tracker</div>
-              <div className="muted" style={{ fontSize: 13 }}>
-                {user.name} ({user.role})
-              </div>
-            </div>
+            <Brand compact subtitle={`${user.name} (${user.role})`} />
             <AppNavLinks links={links} />
           </div>
           <div className="row">

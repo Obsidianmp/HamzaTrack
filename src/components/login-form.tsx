@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 
+import { Brand } from "@/components/brand";
 import { getJson, type SessionResponse } from "@/lib/client-api";
 
 export function LoginForm() {
@@ -50,7 +51,7 @@ export function LoginForm() {
       <div className="panel pad" style={{ width: "min(520px, 100%)" }}>
         <div className="stack">
           <div>
-            <h1 className="heading">Contractor Time Tracker</h1>
+            <Brand subtitle="Billable time tracking for contractor work" />
             <p className="muted" style={{ marginTop: 8 }}>
               Demo login with seeded admin and contractor accounts. Replace with Supabase/Auth later if needed.
             </p>
