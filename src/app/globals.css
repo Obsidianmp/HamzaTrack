@@ -167,11 +167,15 @@ html[data-theme="dark"] .contractor-edited-text {
 }
 
 .contractor-edited-pill {
-  border-color: #fdba74;
-  color: #c2410c;
+  border-color: #fb923c;
+  background: #ffedd5;
+  color: #9a3412;
+  font-weight: 700;
 }
 
 html[data-theme="dark"] .contractor-edited-pill {
+  border-color: #fdba74;
+  background: rgba(154, 52, 18, 0.35);
   color: #fdba74;
 }
 

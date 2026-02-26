@@ -98,23 +98,6 @@ export function ContractorDashboard() {
               Track time, review the log, and adjust time entries when needed.
             </p>
           </div>
-          <div className="toolbar-actions">
-            <PeriodTabs
-              value={preset}
-              onChange={(next) => {
-                setHistoryDay("");
-                setPreset(next);
-              }}
-            />
-            <button
-              type="button"
-              className="btn"
-              onClick={() => window.location.assign(reportUrl(preset, undefined, historyDay || undefined))}
-              disabled={!data}
-            >
-              Download Report
-            </button>
-          </div>
         </div>
 
         {data && !data.storage.durable ? (
@@ -155,6 +138,24 @@ export function ContractorDashboard() {
               ) : null}
             </div>
           </div>
+        </div>
+
+        <div className="toolbar-actions">
+          <PeriodTabs
+            value={preset}
+            onChange={(next) => {
+              setHistoryDay("");
+              setPreset(next);
+            }}
+          />
+          <button
+            type="button"
+            className="btn"
+            onClick={() => window.location.assign(reportUrl(preset, undefined, historyDay || undefined))}
+            disabled={!data}
+          >
+            Download Report
+          </button>
         </div>
       </section>
 

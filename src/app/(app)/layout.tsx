@@ -21,13 +21,14 @@ export default async function AppLayout({
           { href: "/settings", label: "Settings" }
         ]
       : [{ href: "/contractor", label: "Timer" }];
+  const roleLabel = user.role === "admin" ? "Admin" : "Contractor";
 
   return (
     <>
       <header className="nav">
         <div className="nav-inner">
           <div className="row" style={{ gap: "1rem" }}>
-            <Brand compact subtitle={`${user.name} (${user.role})`} />
+            <Brand compact subtitle={`Logged in as ${roleLabel}`} />
             <AppNavLinks links={links} />
           </div>
           <div className="row">
