@@ -98,6 +98,19 @@ export interface DailyBucket {
   totalAmount: number;
 }
 
+export interface MtdAverage {
+  dayCount: number;
+  totalMinutes: number;
+  avgMinutesPerDay: number;
+  avgHoursPerDay: number;
+}
+
+export interface StorageInfo {
+  mode: "json-file" | "postgres-json";
+  durable: boolean;
+  note?: string;
+}
+
 export interface DashboardResponse {
   currentUser: User;
   contractor: User;
@@ -109,4 +122,6 @@ export interface DashboardResponse {
   auditLogs: AuditLog[];
   monthlyBuckets: MonthlyBucket[];
   dailyBuckets: DailyBucket[];
+  mtdAverage: MtdAverage;
+  storage: StorageInfo;
 }

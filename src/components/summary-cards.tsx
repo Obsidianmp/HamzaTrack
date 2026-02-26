@@ -4,10 +4,12 @@ import type { ReportTotals } from "@/types/time-tracker";
 
 export function SummaryCards({
   totals,
-  currency
+  currency,
+  extras = []
 }: {
   totals: ReportTotals;
   currency: string;
+  extras?: Array<{ label: string; value: string }>;
 }) {
   return (
     <div className="grid-4">
@@ -27,6 +29,12 @@ export function SummaryCards({
         <div className="label">Sessions</div>
         <div className="value">{totals.sessionCount}</div>
       </div>
+      {extras.map((item) => (
+        <div className="card-stat" key={item.label}>
+          <div className="label">{item.label}</div>
+          <div className="value">{item.value}</div>
+        </div>
+      ))}
     </div>
   );
 }

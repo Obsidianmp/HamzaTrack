@@ -16,6 +16,7 @@ export async function PATCH(
       startAtUtc?: string;
       endAtUtc?: string;
       notes?: string;
+      amount?: number;
     };
     const entry = await updateEntry(user, id, payload);
     return NextResponse.json({ ok: true, entry });

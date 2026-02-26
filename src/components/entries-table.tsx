@@ -9,6 +9,7 @@ type EditDraft = {
   startLocal: string;
   endLocal: string;
   notes: string;
+  amount: string;
 };
 
 function toLocalInputValue(iso: string) {
@@ -27,13 +28,15 @@ export function EntriesTable({
   timezone,
   currency,
   editable = false,
+  canEditAmount = false,
   onSave
 }: {
   entries: TimeEntry[];
   timezone: string;
   currency: string;
   editable?: boolean;
-  onSave?: (entryId: string, patch: { startAtUtc: string; endAtUtc: string; notes: string }) => Promise<void>;
+  canEditAmount?: boolean;
+  onSave?: (entryId: string, patch: { startAtUtc: string; endAtUtc: string; notes: string; amount?: number }) => Promise<void>;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<EditDraft | null>(null);
@@ -48,7 +51,8 @@ export function EntriesTable({
     setDraft({
       startLocal: toLocalInputValue(entry.startAtUtc),
       endLocal: toLocalInputValue(entry.endAtUtc),
-      notes: entry.notes ?? ""
+      notes: entry.notes ?? "",
+      amount: entry.amount.toFixed(2)
     });
   }
 
@@ -57,10 +61,15 @@ export function EntriesTable({
     setSaving(true);
     setError("");
     try {
+      const parsedAmount = Number(draft.amount);
+      if (canEditAmount && (!Number.isFinite(parsedAmount) || parsedAmount < 0)) {
+        throw new Error("Amount must be a valid non-negative number");
+      }
       await onSave(editingId, {
         startAtUtc: localInputToIso(draft.startLocal),
         endAtUtc: localInputToIso(draft.endLocal),
-        notes: draft.notes
+        notes: draft.notes,
+        amount: canEditAmount ? Math.round((parsedAmount + Number.EPSILON) * 100) / 100 : undefined
       });
       setEditingId(null);
       setDraft(null);
@@ -131,7 +140,20 @@ export function EntriesTable({
                   <td>
                     {formatCurrency(entry.rateSnapshot, currency).replace(/\.00$/, "")}/hr
                   </td>
-                  <td>{formatCurrency(entry.amount, currency)}</td>
+                  <td>
+                    {isEditing && canEditAmount ? (
+                      <input
+                        className="input"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={draft.amount}
+                        onChange={(e) => setDraft({ ...draft, amount: e.target.value })}
+                      />
+                    ) : (
+                      formatCurrency(entry.amount, currency)
+                    )}
+                  </td>
                   <td style={{ minWidth: 180 }}>
                     {isEditing ? (
                       <input

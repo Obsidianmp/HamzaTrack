@@ -7,10 +7,11 @@ import type {
   TrackerDb,
   User
 } from "@/types/time-tracker";
-import { appendAuditLog, createId, nowUtcIso, readDb, sortEntriesDesc, updateDb } from "@/lib/db";
+import { appendAuditLog, createId, getStorageInfo, nowUtcIso, readDb, sortEntriesDesc, updateDb } from "@/lib/db";
 import {
   applyContractToEntryDraft,
   buildDailyBucketsForRange,
+  buildMtdAverage,
   buildMonthlyBuckets,
   buildTotalsForRange,
   clampRange,
@@ -78,6 +79,7 @@ export async function loadDashboard(
   const totals = buildTotalsForRange(baseEntries, range);
   const monthlyBuckets = buildMonthlyBuckets(baseEntries, timezone, 6);
   const dailyBuckets = buildDailyBucketsForRange(baseEntries, range, timezone);
+  const mtdAverage = buildMtdAverage(baseEntries, timezone);
   const activeTimer =
     currentUser.role === "admin"
       ? getActiveTimerForUser(db, contractor.id)
@@ -103,7 +105,9 @@ export async function loadDashboard(
             .slice(0, 100)
         : [],
     monthlyBuckets,
-    dailyBuckets
+    dailyBuckets,
+    mtdAverage,
+    storage: getStorageInfo()
   };
 }
 
@@ -199,15 +203,19 @@ export async function stopTimer(currentUser: User) {
 export async function updateEntry(
   currentUser: User,
   entryId: string,
-  payload: { startAtUtc?: string; endAtUtc?: string; notes?: string }
+  payload: { startAtUtc?: string; endAtUtc?: string; notes?: string; amount?: number }
 ) {
-  if (currentUser.role !== "admin") {
-    throw new Error("Only admin can edit entries");
-  }
-
   return updateDb((db) => {
     const entry = db.timeEntries.find((item) => item.id === entryId);
     if (!entry) throw new Error("Entry not found");
+    const isAdmin = currentUser.role === "admin";
+    const isOwner = entry.userId === currentUser.id;
+    if (!isAdmin && !(currentUser.role === "contractor" && isOwner)) {
+      throw new Error("Not allowed to edit this entry");
+    }
+    if (!isAdmin && payload.amount !== undefined) {
+      throw new Error("Only admin can edit payment amount");
+    }
 
     const nextStart = payload.startAtUtc ?? entry.startAtUtc;
     const nextEnd = payload.endAtUtc ?? entry.endAtUtc;
@@ -239,7 +247,12 @@ export async function updateEntry(
       0,
       Math.floor((new Date(nextEnd).getTime() - new Date(nextStart).getTime()) / 60_000)
     );
-    entry.amount = Math.round(((entry.durationMinutes / 60) * entry.rateSnapshot + Number.EPSILON) * 100) / 100;
+    const calculatedAmount =
+      Math.round(((entry.durationMinutes / 60) * entry.rateSnapshot + Number.EPSILON) * 100) / 100;
+    entry.amount =
+      isAdmin && typeof payload.amount === "number" && Number.isFinite(payload.amount)
+        ? Math.max(0, Math.round((payload.amount + Number.EPSILON) * 100) / 100)
+        : calculatedAmount;
     entry.edited = true;
     entry.updatedAtUtc = nowUtcIso();
 
@@ -249,6 +262,7 @@ export async function updateEntry(
       targetType: "entry",
       targetId: entry.id,
       metadata: {
+        editedByRole: currentUser.role,
         before: oldEntry,
         after: entry
       }

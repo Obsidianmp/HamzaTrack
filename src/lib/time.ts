@@ -2,6 +2,7 @@ import type {
   Contract,
   DailyBucket,
   DateRange,
+  MtdAverage,
   MonthlyBucket,
   PeriodPreset,
   ReportTotals,
@@ -345,6 +346,20 @@ export function buildDailyBucketsForRange(
   }
 
   return Array.from(buckets.values()).sort((a, b) => b.dayKey.localeCompare(a.dayKey));
+}
+
+export function buildMtdAverage(entries: TimeEntry[], timezone: string, now = new Date()): MtdAverage {
+  const mtdRange = clampRange(getPresetRange("mtd", timezone, now));
+  const totals = buildTotalsForRange(entries, mtdRange);
+  const parts = getZonedParts(now, timezone);
+  const dayCount = Math.max(1, parts.day);
+  const avgMinutesPerDay = roundTo2(totals.totalMinutes / dayCount);
+  return {
+    dayCount,
+    totalMinutes: totals.totalMinutes,
+    avgMinutesPerDay,
+    avgHoursPerDay: roundTo2(avgMinutesPerDay / 60)
+  };
 }
 
 export function roundTo2(value: number) {

@@ -24,6 +24,12 @@ export function dashboardUrl(preset: PeriodPreset, timezone?: string) {
   return `/api/dashboard?${params.toString()}`;
 }
 
+export function reportUrl(preset: PeriodPreset, timezone?: string) {
+  const params = new URLSearchParams({ preset });
+  if (timezone) params.set("timezone", timezone);
+  return `/api/reports?${params.toString()}`;
+}
+
 export type SessionResponse = {
   user: DashboardResponse["currentUser"] | null;
   users: TrackerDb["users"];

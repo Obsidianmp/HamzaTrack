@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { dashboardUrl, getJson } from "@/lib/client-api";
+import { dashboardUrl, getJson, reportUrl } from "@/lib/client-api";
 import { entriesToCsv } from "@/lib/csv";
 import { formatCurrency, formatDateTime } from "@/lib/format";
 import { formatDuration } from "@/lib/time";
@@ -69,7 +69,10 @@ export function AdminDashboard() {
     });
   }, [data]);
 
-  async function saveEntry(entryId: string, patch: { startAtUtc: string; endAtUtc: string; notes: string }) {
+  async function saveEntry(
+    entryId: string,
+    patch: { startAtUtc: string; endAtUtc: string; notes: string; amount?: number }
+  ) {
     setSaving(true);
     try {
       await getJson(`/api/entries/${entryId}`, {
@@ -91,24 +94,48 @@ export function AdminDashboard() {
 
   return (
     <div className="stack">
-      <div className="row spread">
-        <div>
-          <h1 className="heading">Admin Dashboard</h1>
-          <p className="muted" style={{ marginTop: 6 }}>
-            Monthly-focused reporting, billable totals, editable logs, and audit history.
-          </p>
+      <section className="panel pad stack simple-top">
+        <div className="dashboard-toolbar">
+          <div>
+            <h1 className="heading">Admin Dashboard</h1>
+            <p className="muted" style={{ marginTop: 6 }}>
+              Clean monthly view, daily averages, downloadable reports, and controlled payment edits.
+            </p>
+          </div>
+          <div className="toolbar-actions">
+            <PeriodTabs value={preset} onChange={setPreset} />
+            <button className="btn" type="button" onClick={() => window.location.assign(reportUrl(preset))} disabled={!data}>
+              Download Report
+            </button>
+            <button className="btn" type="button" onClick={exportCsv} disabled={!data}>
+              Entries CSV
+            </button>
+          </div>
         </div>
-        <div className="row">
-          <PeriodTabs value={preset} onChange={setPreset} />
-          <button className="btn" type="button" onClick={exportCsv} disabled={!data}>
-            Export CSV
-          </button>
-        </div>
-      </div>
 
-      {error ? <div className="error">{error}</div> : null}
+        {data && !data.storage.durable ? (
+          <div className="warning-banner">
+            <strong>Storage warning:</strong> {data.storage.note ?? "Current storage is not durable."}
+          </div>
+        ) : null}
 
-      {data ? <SummaryCards totals={data.totals} currency={currency} /> : <div className="muted">Loading...</div>}
+        {error ? <div className="error">{error}</div> : null}
+
+        {data ? (
+          <SummaryCards
+            totals={data.totals}
+            currency={currency}
+            extras={[
+              {
+                label: `Avg / Day (MTD, ${data.mtdAverage.dayCount}d)`,
+                value: `${data.mtdAverage.avgHoursPerDay.toFixed(2)}h`
+              }
+            ]}
+          />
+        ) : (
+          <div className="muted">Loading...</div>
+        )}
+      </section>
 
       <div className="split-panels">
         <section className="panel pad stack">
@@ -128,6 +155,7 @@ export function AdminDashboard() {
               timezone={data.contractor.timezone}
               currency={currency}
               editable
+              canEditAmount
               onSave={saveEntry}
             />
           ) : null}
