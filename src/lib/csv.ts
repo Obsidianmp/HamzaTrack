@@ -13,7 +13,11 @@ export function entriesToCsv(entries: TimeEntry[], users: User[]) {
       "Currency",
       "Amount",
       "Notes",
-      "Edited"
+      "Edited",
+      "Last Edited By",
+      "Edit Reason",
+      "Approved For Payout",
+      "Amount Overridden"
     ]
   ];
 
@@ -28,7 +32,11 @@ export function entriesToCsv(entries: TimeEntry[], users: User[]) {
       entry.currency,
       String(entry.amount),
       entry.notes ?? "",
-      entry.edited ? "yes" : "no"
+      entry.edited ? "yes" : "no",
+      entry.lastEditedByRole ?? "",
+      entry.lastEditReason ?? "",
+      (entry.approvedForPayout ?? true) ? "yes" : "no",
+      entry.amountOverridden ? "yes" : "no"
     ]);
   }
 
@@ -47,7 +55,10 @@ export function dashboardReportToCsv(data: DashboardResponse) {
   const rows: string[][] = [];
   rows.push(["HamzaTrack Report"]);
   rows.push(["Preset", data.range.preset.toUpperCase()]);
+  rows.push(["Timezone Mode", (data.range.timezoneMode ?? "billing").toUpperCase()]);
   rows.push(["Timezone", data.range.timezone]);
+  if (data.range.billingTimezone) rows.push(["Billing Timezone", data.range.billingTimezone]);
+  if (data.range.displayTimezone) rows.push(["Display Timezone", data.range.displayTimezone]);
   rows.push(["Start UTC", data.range.startUtc]);
   rows.push(["End UTC", data.range.endUtc]);
   rows.push([]);
@@ -80,7 +91,11 @@ export function dashboardReportToCsv(data: DashboardResponse) {
     "Amount",
     "Notes",
     "Source",
-    "Edited"
+    "Edited",
+    "Last Edited By",
+    "Edit Reason",
+    "Approved For Payout",
+    "Amount Overridden"
   ]);
   for (const entry of data.entries) {
     rows.push([
@@ -93,7 +108,11 @@ export function dashboardReportToCsv(data: DashboardResponse) {
       String(entry.amount),
       entry.notes ?? "",
       entry.source,
-      entry.edited ? "yes" : "no"
+      entry.edited ? "yes" : "no",
+      entry.lastEditedByRole ?? "",
+      entry.lastEditReason ?? "",
+      (entry.approvedForPayout ?? true) ? "yes" : "no",
+      entry.amountOverridden ? "yes" : "no"
     ]);
   }
   return rows.map((row) => row.map((cell) => escapeCsvCell(cell ?? "")).join(",")).join("\n");

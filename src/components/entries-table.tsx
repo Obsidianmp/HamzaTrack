@@ -11,6 +11,7 @@ type EditDraft = {
   endLocal: string;
   notes: string;
   amount: string;
+  editReason: string;
 };
 
 function toLocalInputValue(iso: string) {
@@ -56,6 +57,7 @@ export function EntriesTable({
   currency,
   editable = false,
   canEditAmount = false,
+  requireEditReason = false,
   onSave
 }: {
   entries: TimeEntry[];
@@ -63,7 +65,8 @@ export function EntriesTable({
   currency: string;
   editable?: boolean;
   canEditAmount?: boolean;
-  onSave?: (entryId: string, patch: { startAtUtc: string; endAtUtc: string; notes: string; amount?: number }) => Promise<void>;
+  requireEditReason?: boolean;
+  onSave?: (entryId: string, patch: { startAtUtc: string; endAtUtc: string; notes: string; amount?: number; editReason?: string }) => Promise<void>;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<EditDraft | null>(null);
@@ -95,7 +98,8 @@ export function EntriesTable({
       startLocal: toLocalInputValue(entry.startAtUtc),
       endLocal: toLocalInputValue(entry.endAtUtc),
       notes: entry.notes ?? "",
-      amount: entry.amount.toFixed(2)
+      amount: entry.amount.toFixed(2),
+      editReason: ""
     });
   }
 
@@ -108,11 +112,18 @@ export function EntriesTable({
       if (canEditAmount && (!Number.isFinite(parsedAmount) || parsedAmount < 0)) {
         throw new Error("Amount must be a valid non-negative number");
       }
+      const current = entryMap.get(editingId);
+      const timeChanged =
+        !!current && (localInputToIso(draft.startLocal) !== current.startAtUtc || localInputToIso(draft.endLocal) !== current.endAtUtc);
+      if (requireEditReason && timeChanged && !draft.editReason.trim()) {
+        throw new Error("Edit reason is required when changing time");
+      }
       await onSave(editingId, {
         startAtUtc: localInputToIso(draft.startLocal),
         endAtUtc: localInputToIso(draft.endLocal),
         notes: draft.notes,
-        amount: canEditAmount ? Math.round((parsedAmount + Number.EPSILON) * 100) / 100 : undefined
+        amount: canEditAmount ? Math.round((parsedAmount + Number.EPSILON) * 100) / 100 : undefined,
+        editReason: draft.editReason.trim() || undefined
       });
       setEditingId(null);
       setDraft(null);
@@ -137,6 +148,7 @@ export function EntriesTable({
               <th>Amount</th>
               <th>Notes</th>
               <th>Source</th>
+              <th>Edit Reason</th>
               <th>Status</th>
               {editable ? <th>Actions</th> : null}
             </tr>
@@ -144,7 +156,7 @@ export function EntriesTable({
           <tbody>
             {entries.length === 0 ? (
               <tr>
-                <td colSpan={editable ? 9 : 8} className="muted">
+                <td colSpan={editable ? 10 : 9} className="muted">
                   No entries in this range yet.
                 </td>
               </tr>
@@ -153,7 +165,7 @@ export function EntriesTable({
               if (row.type === "week") {
                 return (
                   <tr key={`week-${row.weekKey}`} className="week-index-row">
-                    <td colSpan={editable ? 9 : 8} className="week-index-cell">
+                    <td colSpan={editable ? 10 : 9} className="week-index-cell">
                       {row.label}
                     </td>
                   </tr>
@@ -225,6 +237,21 @@ export function EntriesTable({
                   </td>
                   <td>
                     <span className="pill">{entry.source === "manual" ? "manual" : "timer"}</span>
+                  </td>
+                  <td style={{ minWidth: 180 }}>
+                    {isEditing ? (
+                      <input
+                        className="input"
+                        value={draft.editReason}
+                        onChange={(e) => setDraft({ ...draft, editReason: e.target.value })}
+                        placeholder={requireEditReason ? "Required if time changes" : "Optional"}
+                        maxLength={200}
+                      />
+                    ) : entry.lastEditReason ? (
+                      <span className={contractorEdited ? "contractor-edited-text" : undefined}>{entry.lastEditReason}</span>
+                    ) : (
+                      <span className="muted">-</span>
+                    )}
                   </td>
                   <td>
                     {entry.edited ? (

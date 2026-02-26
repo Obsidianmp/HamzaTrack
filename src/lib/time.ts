@@ -1,4 +1,5 @@
 import type {
+  ActiveTimer,
   Contract,
   DailyBucket,
   DateRange,
@@ -208,14 +209,51 @@ export function applyContractToEntryDraft(
   };
 }
 
-function overlapMinutes(entry: TimeEntry, range: DateRange) {
-  const startMs = Math.max(
-    new Date(entry.startAtUtc).getTime(),
-    new Date(range.startUtc).getTime()
+export function getClosedEntrySegments(entry: TimeEntry) {
+  const segments = entry.segments?.length
+    ? entry.segments
+    : [{ startAtUtc: entry.startAtUtc, endAtUtc: entry.endAtUtc }];
+  return segments.filter(
+    (segment): segment is { startAtUtc: string; endAtUtc: string } =>
+      typeof segment.startAtUtc === "string" && typeof segment.endAtUtc === "string"
   );
-  const endMs = Math.min(new Date(entry.endAtUtc).getTime(), new Date(range.endUtc).getTime());
-  if (endMs <= startMs) return 0;
-  return Math.floor((endMs - startMs) / 60_000);
+}
+
+export function getWorkedMinutesForActiveTimer(timer: ActiveTimer, now = new Date()) {
+  const segments = timer.segments?.length ? timer.segments : [{ startAtUtc: timer.startedAtUtc }];
+  let totalMs = 0;
+  for (const segment of segments) {
+    const startMs = new Date(segment.startAtUtc).getTime();
+    const endMs = segment.endAtUtc ? new Date(segment.endAtUtc).getTime() : now.getTime();
+    if (Number.isFinite(startMs) && Number.isFinite(endMs) && endMs > startMs) {
+      totalMs += endMs - startMs;
+    }
+  }
+  return Math.floor(totalMs / 60_000);
+}
+
+function entryMinuteRateFromAmount(entry: TimeEntry) {
+  const baseMinutes = Math.max(1, entry.durationMinutes);
+  return entry.amount / baseMinutes;
+}
+
+function overlapMinutesAndAmount(entry: TimeEntry, range: DateRange) {
+  let minutesTotal = 0;
+  let amountTotal = 0;
+  const segments = getClosedEntrySegments(entry);
+  for (const segment of segments) {
+    const startMs = Math.max(new Date(segment.startAtUtc).getTime(), new Date(range.startUtc).getTime());
+    const endMs = Math.min(new Date(segment.endAtUtc).getTime(), new Date(range.endUtc).getTime());
+    if (endMs <= startMs) continue;
+    const minutes = Math.floor((endMs - startMs) / 60_000);
+    if (minutes <= 0) continue;
+    minutesTotal += minutes;
+    amountTotal += minutes * entryMinuteRateFromAmount(entry);
+  }
+  return {
+    minutes: minutesTotal,
+    amount: roundMoney(amountTotal)
+  };
 }
 
 export function buildTotalsForRange(entries: TimeEntry[], range: DateRange): ReportTotals {
@@ -224,11 +262,12 @@ export function buildTotalsForRange(entries: TimeEntry[], range: DateRange): Rep
   let sessionCount = 0;
 
   for (const entry of entries) {
-    const minutes = overlapMinutes(entry, range);
+    const overlap = overlapMinutesAndAmount(entry, range);
+    const minutes = overlap.minutes;
     if (minutes <= 0) continue;
     sessionCount += 1;
     totalMinutes += minutes;
-    totalAmount += calculateAmount(minutes, entry.rateSnapshot);
+    totalAmount += overlap.amount;
   }
 
   return {
@@ -243,9 +282,11 @@ export function filterEntriesByRange(entries: TimeEntry[], range: DateRange) {
   const startMs = new Date(range.startUtc).getTime();
   const endMs = new Date(range.endUtc).getTime();
   return entries.filter((entry) => {
-    const entryStart = new Date(entry.startAtUtc).getTime();
-    const entryEnd = new Date(entry.endAtUtc).getTime();
-    return entryEnd > startMs && entryStart < endMs;
+    return getClosedEntrySegments(entry).some((segment) => {
+      const entryStart = new Date(segment.startAtUtc).getTime();
+      const entryEnd = new Date(segment.endAtUtc).getTime();
+      return entryEnd > startMs && entryStart < endMs;
+    });
   });
 }
 
@@ -300,20 +341,22 @@ export function buildMonthlyBuckets(
   }
 
   for (const entry of entries) {
-    let cursor = new Date(entry.startAtUtc);
-    const entryEnd = new Date(entry.endAtUtc);
-    while (cursor < entryEnd) {
-      const key = monthKeyInTimezone(cursor, timezone);
-      const boundary = nextMonthBoundaryUtc(cursor, timezone);
-      const segmentEnd = boundary < entryEnd ? boundary : entryEnd;
-      const minutes = Math.floor((segmentEnd.getTime() - cursor.getTime()) / 60_000);
-      if (minutes > 0 && buckets.has(key)) {
-        const bucket = buckets.get(key)!;
-        bucket.totalMinutes += minutes;
-        bucket.totalAmount = roundMoney(bucket.totalAmount + calculateAmount(minutes, entry.rateSnapshot));
+    for (const worked of getClosedEntrySegments(entry)) {
+      let cursor = new Date(worked.startAtUtc);
+      const entryEnd = new Date(worked.endAtUtc);
+      while (cursor < entryEnd) {
+        const key = monthKeyInTimezone(cursor, timezone);
+        const boundary = nextMonthBoundaryUtc(cursor, timezone);
+        const segmentEnd = boundary < entryEnd ? boundary : entryEnd;
+        const minutes = Math.floor((segmentEnd.getTime() - cursor.getTime()) / 60_000);
+        if (minutes > 0 && buckets.has(key)) {
+          const bucket = buckets.get(key)!;
+          bucket.totalMinutes += minutes;
+          bucket.totalAmount = roundMoney(bucket.totalAmount + minutes * entryMinuteRateFromAmount(entry));
+        }
+        if (segmentEnd.getTime() <= cursor.getTime()) break;
+        cursor = segmentEnd;
       }
-      if (segmentEnd.getTime() <= cursor.getTime()) break;
-      cursor = segmentEnd;
     }
   }
 
@@ -336,29 +379,31 @@ export function buildDailyBucketsForRange(
   const rangeEnd = new Date(range.endUtc);
 
   for (const entry of entries) {
-    const segmentStartMs = Math.max(new Date(entry.startAtUtc).getTime(), rangeStart.getTime());
-    const segmentEndMs = Math.min(new Date(entry.endAtUtc).getTime(), rangeEnd.getTime());
-    if (segmentEndMs <= segmentStartMs) continue;
+    for (const workedSegment of getClosedEntrySegments(entry)) {
+      const segmentStartMs = Math.max(new Date(workedSegment.startAtUtc).getTime(), rangeStart.getTime());
+      const segmentEndMs = Math.min(new Date(workedSegment.endAtUtc).getTime(), rangeEnd.getTime());
+      if (segmentEndMs <= segmentStartMs) continue;
 
-    let cursor = new Date(segmentStartMs);
-    const end = new Date(segmentEndMs);
-    while (cursor < end) {
-      const key = dayKeyInTimezone(cursor, timezone);
-      const boundary = nextDayBoundaryUtc(cursor, timezone);
-      const segmentEnd = boundary < end ? boundary : end;
-      const minutes = Math.floor((segmentEnd.getTime() - cursor.getTime()) / 60_000);
-      if (minutes > 0) {
-        const existing = buckets.get(key) ?? {
-          dayKey: key,
-          totalMinutes: 0,
-          totalAmount: 0
-        };
-        existing.totalMinutes += minutes;
-        existing.totalAmount = roundMoney(existing.totalAmount + calculateAmount(minutes, entry.rateSnapshot));
-        buckets.set(key, existing);
+      let cursor = new Date(segmentStartMs);
+      const end = new Date(segmentEndMs);
+      while (cursor < end) {
+        const key = dayKeyInTimezone(cursor, timezone);
+        const boundary = nextDayBoundaryUtc(cursor, timezone);
+        const segmentEnd = boundary < end ? boundary : end;
+        const minutes = Math.floor((segmentEnd.getTime() - cursor.getTime()) / 60_000);
+        if (minutes > 0) {
+          const existing = buckets.get(key) ?? {
+            dayKey: key,
+            totalMinutes: 0,
+            totalAmount: 0
+          };
+          existing.totalMinutes += minutes;
+          existing.totalAmount = roundMoney(existing.totalAmount + minutes * entryMinuteRateFromAmount(entry));
+          buckets.set(key, existing);
+        }
+        if (segmentEnd.getTime() <= cursor.getTime()) break;
+        cursor = segmentEnd;
       }
-      if (segmentEnd.getTime() <= cursor.getTime()) break;
-      cursor = segmentEnd;
     }
   }
 
@@ -377,6 +422,19 @@ export function buildMtdAverage(entries: TimeEntry[], timezone: string, now = ne
     avgMinutesPerDay,
     avgHoursPerDay: roundTo2(avgMinutesPerDay / 60)
   };
+}
+
+export function getMonthRange(monthKey: string, timezone: string): DateRange {
+  const match = monthKey.match(/^(\d{4})-(\d{2})$/);
+  if (!match) {
+    throw new Error("Invalid month format. Expected YYYY-MM");
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const start = zonedDateTimeToUtc(timezone, { year, month, day: 1, hour: 0, minute: 0, second: 0 });
+  const nextMonth = month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
+  const end = zonedDateTimeToUtc(timezone, { ...nextMonth, day: 1, hour: 0, minute: 0, second: 0 });
+  return { startUtc: start.toISOString(), endUtc: end.toISOString() };
 }
 
 export function roundTo2(value: number) {

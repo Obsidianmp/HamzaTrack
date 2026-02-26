@@ -4,9 +4,12 @@ export type AuditAction =
   | "login"
   | "logout"
   | "timer_start"
+  | "timer_pause"
+  | "timer_resume"
   | "timer_stop"
   | "entry_create"
   | "entry_edit"
+  | "entry_approve"
   | "settings_update"
   | "seed_data";
 
@@ -28,6 +31,12 @@ export interface Contract {
 
 export interface AppSettings {
   defaultContractorUserId: string;
+  billingTimezone?: string;
+}
+
+export interface TimerSegment {
+  startAtUtc: string;
+  endAtUtc?: string;
 }
 
 export interface ActiveTimer {
@@ -35,6 +44,9 @@ export interface ActiveTimer {
   startedAtUtc: string;
   startedByUserId: string;
   source: string;
+  status?: "running" | "paused";
+  segments?: TimerSegment[];
+  pausedAtUtc?: string | null;
 }
 
 export interface TimeEntry {
@@ -48,8 +60,14 @@ export interface TimeEntry {
   amount: number;
   notes?: string;
   source: string;
+  segments?: TimerSegment[];
   edited: boolean;
   lastEditedByRole?: Role;
+  lastEditReason?: string;
+  approvedForPayout?: boolean;
+  approvedAtUtc?: string;
+  approvedByUserId?: string;
+  amountOverridden?: boolean;
   createdAtUtc: string;
   updatedAtUtc: string;
 }
@@ -117,7 +135,14 @@ export interface DashboardResponse {
   contractor: User;
   contract: Contract;
   activeTimer: ActiveTimer | null;
-  range: DateRange & { preset: PeriodPreset; timezone: string; selectedDay?: string | null };
+  range: DateRange & {
+    preset: PeriodPreset;
+    timezone: string;
+    timezoneMode?: "billing" | "display";
+    billingTimezone?: string;
+    displayTimezone?: string;
+    selectedDay?: string | null;
+  };
   totals: ReportTotals;
   entries: TimeEntry[];
   auditLogs: AuditLog[];
@@ -125,4 +150,37 @@ export interface DashboardResponse {
   dailyBuckets: DailyBucket[];
   mtdAverage: MtdAverage;
   storage: StorageInfo;
+}
+
+export interface PayoutSummaryEntry {
+  id: string;
+  startAtUtc: string;
+  endAtUtc: string;
+  durationMinutes: number;
+  amount: number;
+  amountOverridden: boolean;
+  approvedForPayout: boolean;
+  edited: boolean;
+  lastEditedByRole?: Role;
+  lastEditReason?: string;
+  notes?: string;
+  source: string;
+}
+
+export interface PayoutSummaryResponse {
+  monthKey: string;
+  billingTimezone: string;
+  currency: string;
+  totals: {
+    totalMinutes: number;
+    totalHours: number;
+    totalAmount: number;
+    approvedMinutes: number;
+    approvedHours: number;
+    approvedAmount: number;
+    pendingReviewMinutes: number;
+    pendingReviewHours: number;
+    overrideCount: number;
+  };
+  entries: PayoutSummaryEntry[];
 }

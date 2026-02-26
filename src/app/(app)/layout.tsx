@@ -18,6 +18,7 @@ export default async function AppLayout({
     user.role === "admin"
       ? [
           { href: "/admin", label: "Dashboard" },
+          { href: "/payouts", label: "Payouts" },
           { href: "/settings", label: "Settings" }
         ]
       : [{ href: "/contractor", label: "Timer" }];

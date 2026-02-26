@@ -2,15 +2,31 @@
 
 import { useEffect, useState, useTransition } from "react";
 
-import { dashboardUrl, getJson, reportUrl } from "@/lib/client-api";
+import { dashboardUrl, getJson, reportPdfUrl, reportUrl } from "@/lib/client-api";
 import { formatCurrency, formatElapsed } from "@/lib/format";
-import type { DashboardResponse, PeriodPreset } from "@/types/time-tracker";
+import type { ActiveTimer, DashboardResponse, PeriodPreset } from "@/types/time-tracker";
+import { EntriesTable } from "@/components/entries-table";
 import { PeriodTabs } from "@/components/period-tabs";
 import { SummaryCards } from "@/components/summary-cards";
-import { EntriesTable } from "@/components/entries-table";
+import { TimezoneModeToggle } from "@/components/timezone-mode-toggle";
+
+function getElapsedMs(timer: ActiveTimer | null, nowMs: number) {
+  if (!timer) return 0;
+  const segments = timer.segments?.length ? timer.segments : [{ startAtUtc: timer.startedAtUtc }];
+  let total = 0;
+  for (const segment of segments) {
+    const startMs = new Date(segment.startAtUtc).getTime();
+    const endMs = segment.endAtUtc ? new Date(segment.endAtUtc).getTime() : nowMs;
+    if (Number.isFinite(startMs) && Number.isFinite(endMs) && endMs > startMs) {
+      total += endMs - startMs;
+    }
+  }
+  return total;
+}
 
 export function ContractorDashboard() {
   const [preset, setPreset] = useState<PeriodPreset>("mtd");
+  const [timezoneMode, setTimezoneMode] = useState<"billing" | "display">("billing");
   const [showHistory, setShowHistory] = useState(false);
   const [historyDay, setHistoryDay] = useState("");
   const [data, setData] = useState<DashboardResponse | null>(null);
@@ -19,11 +35,15 @@ export function ContractorDashboard() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
-  const timezone = data?.contractor.timezone ?? "UTC";
+  const effectiveTimezone = data?.range.timezone ?? "UTC";
 
-  async function refreshDashboard(nextPreset = preset, nextHistoryDay = historyDay || undefined) {
+  async function refreshDashboard(
+    nextPreset = preset,
+    nextHistoryDay = historyDay || undefined,
+    nextTimezoneMode = timezoneMode
+  ) {
     setError("");
-    const response = await getJson<DashboardResponse>(dashboardUrl(nextPreset, undefined, nextHistoryDay));
+    const response = await getJson<DashboardResponse>(dashboardUrl(nextPreset, undefined, nextHistoryDay, nextTimezoneMode));
     setData(response);
   }
 
@@ -32,7 +52,7 @@ export function ContractorDashboard() {
     const pull = async () => {
       try {
         const response = await getJson<DashboardResponse>(
-          dashboardUrl(preset, undefined, historyDay || undefined)
+          dashboardUrl(preset, undefined, historyDay || undefined, timezoneMode)
         );
         if (!active) return;
         setError("");
@@ -51,23 +71,31 @@ export function ContractorDashboard() {
       active = false;
       clearInterval(poll);
     };
-  }, [preset, historyDay]);
+  }, [preset, historyDay, timezoneMode]);
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
   }, []);
 
-  const elapsedLabel = data?.activeTimer
-    ? formatElapsed(now - new Date(data.activeTimer.startedAtUtc).getTime())
-    : "00:00:00";
+  const elapsedLabel = formatElapsed(getElapsedMs(data?.activeTimer ?? null, now));
+  const timerStatus = data?.activeTimer?.status ?? null;
+  const timerStartedLabel = data?.activeTimer?.segments?.[0]?.startAtUtc ?? data?.activeTimer?.startedAtUtc ?? null;
 
-  async function toggleTimer() {
+  async function runTimerAction(action: "start" | "pause" | "resume" | "stop") {
     if (!data) return;
     setError("");
     startTransition(async () => {
       try {
-        await getJson(data.activeTimer ? "/api/timer/stop" : "/api/timer/start", { method: "POST" });
+        const path =
+          action === "start"
+            ? "/api/timer/start"
+            : action === "pause"
+              ? "/api/timer/pause"
+              : action === "resume"
+                ? "/api/timer/resume"
+                : "/api/timer/stop";
+        await getJson(path, { method: "POST" });
         await refreshDashboard(preset);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Timer action failed");
@@ -75,7 +103,10 @@ export function ContractorDashboard() {
     });
   }
 
-  async function saveEntry(entryId: string, patch: { startAtUtc: string; endAtUtc: string; notes: string; amount?: number }) {
+  async function saveEntry(
+    entryId: string,
+    patch: { startAtUtc: string; endAtUtc: string; notes: string; amount?: number; editReason?: string }
+  ) {
     setSavingEdit(true);
     try {
       await getJson(`/api/entries/${entryId}`, {
@@ -95,7 +126,7 @@ export function ContractorDashboard() {
           <div>
             <h1 className="heading">Contractor Timer</h1>
             <p className="muted" style={{ marginTop: 6 }}>
-              Track time, review the log, and adjust time entries when needed.
+              Track time and log work sessions. Billing reports can be viewed in New York billing time or your display timezone.
             </p>
           </div>
         </div>
@@ -111,9 +142,10 @@ export function ContractorDashboard() {
             <div>
               <div className="muted">Current timer</div>
               <div className="timer-display">{elapsedLabel}</div>
-              {data?.activeTimer ? (
+              {timerStatus ? (
                 <div className="muted" style={{ fontSize: 14 }}>
-                  Started {new Date(data.activeTimer.startedAtUtc).toLocaleString()}
+                  {timerStatus === "paused" ? "Paused" : "Running"}
+                  {timerStartedLabel ? ` · Started ${new Date(timerStartedLabel).toLocaleString()}` : ""}
                 </div>
               ) : (
                 <div className="muted" style={{ fontSize: 14 }}>
@@ -121,16 +153,35 @@ export function ContractorDashboard() {
                 </div>
               )}
             </div>
-            <div className="stack" style={{ justifyItems: "start" }}>
-              <button
-                type="button"
-                className={`btn ${data?.activeTimer ? "danger" : "primary"}`}
-                onClick={toggleTimer}
-                disabled={busy || !data}
-                style={{ minWidth: 140 }}
-              >
-                {busy ? "Working..." : data?.activeTimer ? "Stop Timer" : "Start Timer"}
-              </button>
+            <div className="stack" style={{ justifyItems: "start", minWidth: "min(100%, 320px)" }}>
+              <div className="row button-group-wrap">
+                {!data?.activeTimer ? (
+                  <button
+                    type="button"
+                    className="btn primary"
+                    onClick={() => runTimerAction("start")}
+                    disabled={busy || !data}
+                    style={{ minWidth: 140 }}
+                  >
+                    {busy ? "Working..." : "Start Timer"}
+                  </button>
+                ) : (
+                  <>
+                    {timerStatus === "running" ? (
+                      <button type="button" className="btn" onClick={() => runTimerAction("pause")} disabled={busy}>
+                        {busy ? "Working..." : "Pause Timer"}
+                      </button>
+                    ) : (
+                      <button type="button" className="btn" onClick={() => runTimerAction("resume")} disabled={busy}>
+                        {busy ? "Working..." : "Resume Timer"}
+                      </button>
+                    )}
+                    <button type="button" className="btn primary" onClick={() => runTimerAction("stop")} disabled={busy}>
+                      {busy ? "Working..." : "Log Work Session"}
+                    </button>
+                  </>
+                )}
+              </div>
               {data ? (
                 <div className="muted" style={{ fontSize: 13 }}>
                   Rate: {formatCurrency(data.contract.hourlyRate, data.contract.currency)}/hr
@@ -139,6 +190,20 @@ export function ContractorDashboard() {
             </div>
           </div>
         </div>
+
+        {data ? (
+          <div className="toolbar-actions">
+            <TimezoneModeToggle
+              value={timezoneMode}
+              billingTimezone={data.range.billingTimezone ?? "America/New_York"}
+              displayTimezone={data.range.displayTimezone ?? data.currentUser.timezone}
+              onChange={(next) => {
+                setHistoryDay("");
+                setTimezoneMode(next);
+              }}
+            />
+          </div>
+        ) : null}
 
         <div className="toolbar-actions">
           <PeriodTabs
@@ -151,10 +216,21 @@ export function ContractorDashboard() {
           <button
             type="button"
             className="btn"
-            onClick={() => window.location.assign(reportUrl(preset, undefined, historyDay || undefined))}
+            onClick={() => window.location.assign(reportUrl(preset, undefined, historyDay || undefined, timezoneMode))}
             disabled={!data}
           >
-            Download Report
+            Download CSV
+          </button>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => window.location.assign(reportPdfUrl(preset, undefined, historyDay || undefined, timezoneMode))}
+            disabled={!data}
+          >
+            Export PDF
+          </button>
+          <button type="button" className="btn" onClick={() => window.location.assign("/api/backup")}>
+            Backup / Export All
           </button>
         </div>
       </section>
@@ -179,7 +255,7 @@ export function ContractorDashboard() {
           <div>
             <h2 className="subheading">Time Log</h2>
             <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
-              Period timezone: {timezone}
+              Viewing in {timezoneMode === "billing" ? "Billing Time" : "Display Time"}: {effectiveTimezone}
               {data?.range.selectedDay ? ` | History day: ${data.range.selectedDay}` : ""}
             </div>
           </div>
@@ -223,10 +299,11 @@ export function ContractorDashboard() {
         {data ? (
           <EntriesTable
             entries={data.entries}
-            timezone={timezone}
+            timezone={effectiveTimezone}
             currency={data.contract.currency}
             editable
             canEditAmount={false}
+            requireEditReason
             onSave={saveEntry}
           />
         ) : (

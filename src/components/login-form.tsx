@@ -16,6 +16,7 @@ export function LoginForm() {
 
   const selectedUser = session?.users.find((user) => user.id === selectedUserId) ?? null;
   const requiresAdminPassword = selectedUser?.role === "admin";
+  const displayRoleLabel = (role: "admin" | "contractor") => (role === "admin" ? "Admin" : "Contractor");
 
   useEffect(() => {
     void getJson<SessionResponse>("/api/session")
@@ -69,7 +70,7 @@ export function LoginForm() {
               >
                 {session?.users.map((user) => (
                   <option key={user.id} value={user.id}>
-                    {user.name} ({user.role})
+                    {displayRoleLabel(user.role)}
                   </option>
                 ))}
               </select>

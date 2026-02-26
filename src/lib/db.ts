@@ -7,6 +7,7 @@ import postgres, { type Sql } from "postgres";
 import type {
   AuditAction,
   AuditLog,
+  TimerSegment,
   StorageInfo,
   TimeEntry,
   TrackerDb
@@ -21,6 +22,7 @@ const LOCAL_PATH = path.join(RUNTIME_DATA_DIR, "db.local.json");
 const DB_ROW_ID = "singleton";
 const POSTGRES_URL =
   process.env.DATABASE_URL ??
+  process.env.SUPABASE_DB_URL ??
   process.env.POSTGRES_URL_NON_POOLING ??
   process.env.POSTGRES_URL ??
   null;
@@ -28,6 +30,64 @@ const POSTGRES_URL =
 let writeQueue: Promise<void> = Promise.resolve();
 let pgClient: Sql | null = null;
 let pgInitPromise: Promise<void> | null = null;
+
+function normalizeSegments(entry: { startedAtUtc?: string; segments?: TimerSegment[]; status?: string }): TimerSegment[] {
+  if (Array.isArray(entry.segments) && entry.segments.length > 0) {
+    return entry.segments
+      .filter((segment) => segment && typeof segment.startAtUtc === "string")
+      .map((segment) => ({
+        startAtUtc: segment.startAtUtc,
+        endAtUtc: typeof segment.endAtUtc === "string" ? segment.endAtUtc : undefined
+      }));
+  }
+  if (entry.startedAtUtc) {
+    return [{ startAtUtc: entry.startedAtUtc }];
+  }
+  return [];
+}
+
+function normalizeDb(db: TrackerDb): TrackerDb {
+  db.appSettings = db.appSettings ?? ({ defaultContractorUserId: "" } as TrackerDb["appSettings"]);
+  if (!db.appSettings.billingTimezone) {
+    db.appSettings.billingTimezone = "America/New_York";
+  }
+
+  db.activeTimers = (db.activeTimers ?? []).map((timer) => {
+    const segments = normalizeSegments(timer);
+    const openSegment = [...segments].reverse().find((segment) => !segment.endAtUtc);
+    return {
+      ...timer,
+      status: timer.status === "paused" ? "paused" : "running",
+      pausedAtUtc: timer.pausedAtUtc ?? null,
+      segments: segments.length > 0 ? segments : timer.startedAtUtc ? [{ startAtUtc: timer.startedAtUtc }] : [],
+      startedAtUtc: timer.startedAtUtc ?? (segments[0]?.startAtUtc ?? nowUtcIso()),
+      source: timer.source ?? "web",
+      startedByUserId: timer.startedByUserId ?? timer.userId,
+      ...(openSegment ? {} : timer.status === "paused" ? {} : { status: "paused" as const })
+    };
+  });
+
+  db.timeEntries = (db.timeEntries ?? []).map((entry) => {
+    const expectedAmount = Math.round(((entry.durationMinutes / 60) * entry.rateSnapshot + Number.EPSILON) * 100) / 100;
+    const amountOverridden = entry.amountOverridden ?? Math.abs((entry.amount ?? 0) - expectedAmount) > 0.009;
+    return {
+      ...entry,
+      segments:
+        Array.isArray(entry.segments) && entry.segments.length > 0
+          ? entry.segments
+          : [{ startAtUtc: entry.startAtUtc, endAtUtc: entry.endAtUtc }],
+      approvedForPayout: entry.approvedForPayout ?? true,
+      amountOverridden,
+      notes: entry.notes ?? "",
+      edited: Boolean(entry.edited)
+    };
+  });
+
+  db.auditLogs = db.auditLogs ?? [];
+  db.contracts = db.contracts ?? [];
+  db.users = db.users ?? [];
+  return db;
+}
 
 function hasPostgresStorage() {
   return Boolean(POSTGRES_URL);
@@ -98,12 +158,12 @@ export async function readDb(): Promise<TrackerDb> {
     if (!rows[0]) {
       throw new Error("Durable state row not found");
     }
-    return rows[0].state;
+    return normalizeDb(rows[0].state);
   }
 
   await ensureLocalDb();
   const raw = await readFile(LOCAL_PATH, "utf-8");
-  return JSON.parse(raw) as TrackerDb;
+  return normalizeDb(JSON.parse(raw) as TrackerDb);
 }
 
 async function writeDb(db: TrackerDb) {

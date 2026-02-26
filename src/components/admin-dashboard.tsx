@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-import { dashboardUrl, getJson, reportUrl } from "@/lib/client-api";
+import { dashboardUrl, getJson, reportPdfUrl, reportUrl } from "@/lib/client-api";
 import { entriesToCsv } from "@/lib/csv";
 import { formatCurrency, formatDateTime } from "@/lib/format";
 import { formatDuration } from "@/lib/time";
@@ -11,6 +12,7 @@ import { EntriesTable } from "@/components/entries-table";
 import { ManualEntryForm } from "@/components/manual-entry-form";
 import { PeriodTabs } from "@/components/period-tabs";
 import { SummaryCards } from "@/components/summary-cards";
+import { TimezoneModeToggle } from "@/components/timezone-mode-toggle";
 
 function downloadTextFile(filename: string, content: string) {
   const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
@@ -24,14 +26,19 @@ function downloadTextFile(filename: string, content: string) {
 
 export function AdminDashboard() {
   const [preset, setPreset] = useState<PeriodPreset>("mtd");
+  const [timezoneMode, setTimezoneMode] = useState<"billing" | "display">("billing");
   const [showHistory, setShowHistory] = useState(false);
   const [historyDay, setHistoryDay] = useState("");
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  async function refreshDashboard(nextPreset = preset, nextHistoryDay = historyDay || undefined) {
-    const response = await getJson<DashboardResponse>(dashboardUrl(nextPreset, undefined, nextHistoryDay));
+  async function refreshDashboard(
+    nextPreset = preset,
+    nextHistoryDay = historyDay || undefined,
+    nextTimezoneMode = timezoneMode
+  ) {
+    const response = await getJson<DashboardResponse>(dashboardUrl(nextPreset, undefined, nextHistoryDay, nextTimezoneMode));
     setData(response);
   }
 
@@ -40,7 +47,7 @@ export function AdminDashboard() {
     const pull = async () => {
       try {
         const response = await getJson<DashboardResponse>(
-          dashboardUrl(preset, undefined, historyDay || undefined)
+          dashboardUrl(preset, undefined, historyDay || undefined, timezoneMode)
         );
         if (!active) return;
         setError("");
@@ -59,7 +66,7 @@ export function AdminDashboard() {
       active = false;
       clearInterval(poll);
     };
-  }, [preset, historyDay]);
+  }, [preset, historyDay, timezoneMode]);
 
   const currency = data?.contract.currency ?? "USD";
   const actorUsers = useMemo(() => {
@@ -75,7 +82,7 @@ export function AdminDashboard() {
 
   async function saveEntry(
     entryId: string,
-    patch: { startAtUtc: string; endAtUtc: string; notes: string; amount?: number }
+    patch: { startAtUtc: string; endAtUtc: string; notes: string; amount?: number; editReason?: string }
   ) {
     setSaving(true);
     try {
@@ -96,6 +103,8 @@ export function AdminDashboard() {
     downloadTextFile(`time-log-${preset}-${stamp}.csv`, csv);
   }
 
+  const reportTimezone = data?.range.timezone ?? data?.currentUser.timezone ?? "UTC";
+
   return (
     <div className="stack">
       <section className="panel pad stack simple-top">
@@ -103,28 +112,13 @@ export function AdminDashboard() {
           <div>
             <h1 className="heading">Admin Dashboard</h1>
             <p className="muted" style={{ marginTop: 6 }}>
-              Clean monthly view, daily averages, downloadable reports, and controlled payment edits.
+              Monthly tracking, payout review, and controlled billable edits with clear audit history.
             </p>
           </div>
-          <div className="toolbar-actions">
-            <PeriodTabs
-              value={preset}
-              onChange={(next) => {
-                setHistoryDay("");
-                setPreset(next);
-              }}
-            />
-            <button
-              className="btn"
-              type="button"
-              onClick={() => window.location.assign(reportUrl(preset, undefined, historyDay || undefined))}
-              disabled={!data}
-            >
-              Download Report
-            </button>
-            <button className="btn" type="button" onClick={exportCsv} disabled={!data}>
-              Entries CSV
-            </button>
+          <div className="row">
+            <Link className="btn" href="/payouts">
+              Monthly Payout Summary
+            </Link>
           </div>
         </div>
 
@@ -135,6 +129,52 @@ export function AdminDashboard() {
         ) : null}
 
         {error ? <div className="error">{error}</div> : null}
+
+        {data ? (
+          <div className="toolbar-actions">
+            <TimezoneModeToggle
+              value={timezoneMode}
+              billingTimezone={data.range.billingTimezone ?? "America/New_York"}
+              displayTimezone={data.range.displayTimezone ?? data.currentUser.timezone}
+              onChange={(next) => {
+                setHistoryDay("");
+                setTimezoneMode(next);
+              }}
+            />
+          </div>
+        ) : null}
+
+        <div className="toolbar-actions">
+          <PeriodTabs
+            value={preset}
+            onChange={(next) => {
+              setHistoryDay("");
+              setPreset(next);
+            }}
+          />
+          <button
+            className="btn"
+            type="button"
+            onClick={() => window.location.assign(reportUrl(preset, undefined, historyDay || undefined, timezoneMode))}
+            disabled={!data}
+          >
+            Download CSV Report
+          </button>
+          <button
+            className="btn"
+            type="button"
+            onClick={() => window.location.assign(reportPdfUrl(preset, undefined, historyDay || undefined, timezoneMode))}
+            disabled={!data}
+          >
+            Export PDF Summary
+          </button>
+          <button className="btn" type="button" onClick={exportCsv} disabled={!data}>
+            Entries CSV
+          </button>
+          <button className="btn" type="button" onClick={() => window.location.assign("/api/backup")}>
+            Backup / Export All
+          </button>
+        </div>
 
         {data ? (
           <SummaryCards
@@ -158,12 +198,13 @@ export function AdminDashboard() {
             <div>
               <h2 className="subheading">Time Entries</h2>
               <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
-                Contractor timezone: {data?.contractor.timezone ?? "UTC"} | Range preset: {preset.toUpperCase()}
+                Viewing in {timezoneMode === "billing" ? "Billing Time" : "Display Time"}: {reportTimezone} | Range preset:{" "}
+                {preset.toUpperCase()}
                 {data?.range.selectedDay ? ` | History day: ${data.range.selectedDay}` : ""}
               </div>
             </div>
             <div className="row">
-              {data?.activeTimer ? <span className="pill warn">Timer running</span> : <span className="pill">Timer stopped</span>}
+              {data?.activeTimer ? <span className="pill warn">Timer session active</span> : <span className="pill">No active timer</span>}
               <button type="button" className="btn" onClick={() => setShowHistory((v) => !v)}>
                 {showHistory ? "Close History" : "History"}
               </button>
@@ -204,7 +245,7 @@ export function AdminDashboard() {
           {data ? (
             <EntriesTable
               entries={data.entries}
-              timezone={data.contractor.timezone}
+              timezone={reportTimezone}
               currency={currency}
               editable
               canEditAmount
@@ -228,7 +269,7 @@ export function AdminDashboard() {
             <div>
               <h2 className="subheading">Daily Totals ({preset.toUpperCase()})</h2>
               <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
-                Day-by-day billable totals for quick corrections and checks
+                Day-by-day totals in {reportTimezone} (billing timezone is fixed to New York for payout calculations)
               </div>
             </div>
             <div className="table-wrap">
@@ -265,7 +306,7 @@ export function AdminDashboard() {
             <div>
               <h2 className="subheading">Monthly Trend (last 6)</h2>
               <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
-                Accurate even if a session crosses month-end
+                Split accurately by month even when sessions cross month-end
               </div>
             </div>
             <div className="table-wrap">
@@ -294,7 +335,7 @@ export function AdminDashboard() {
             <div>
               <h2 className="subheading">Audit Log</h2>
               <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
-                Start/stop events and manual edits
+                Timer events, edits, approvals, and settings changes
               </div>
             </div>
             <div className="table-wrap">

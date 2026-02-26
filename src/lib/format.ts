@@ -13,8 +13,8 @@ export function formatCurrency(amount: number, currency: string) {
 export function formatDateTime(iso: string, timezone: string) {
   return new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
-    year: "numeric",
-    month: "short",
+    year: "2-digit",
+    month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit"
@@ -24,8 +24,8 @@ export function formatDateTime(iso: string, timezone: string) {
 export function formatDateOnly(iso: string, timezone: string) {
   return new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
-    year: "numeric",
-    month: "short",
+    year: "2-digit",
+    month: "2-digit",
     day: "2-digit"
   }).format(new Date(iso));
 }

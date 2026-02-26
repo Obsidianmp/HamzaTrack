@@ -118,6 +118,35 @@ textarea {
   flex-wrap: wrap;
 }
 
+.button-group-wrap {
+  width: 100%;
+}
+
+.timezone-mode-toggle {
+  display: inline-flex;
+  gap: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.25rem;
+  background: color-mix(in srgb, var(--panel-solid) 70%, var(--bg-2));
+}
+
+.timezone-mode-toggle button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 10px;
+  padding: 0.45rem 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.timezone-mode-toggle button.active {
+  background: var(--panel-solid);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
 .simple-top {
   gap: 0.9rem;
 }
@@ -578,5 +607,13 @@ tbody tr:hover {
 
   .timer-box .row.spread {
     align-items: flex-start;
+  }
+
+  .timezone-mode-toggle {
+    width: 100%;
+  }
+
+  .timezone-mode-toggle button {
+    flex: 1;
   }
 }

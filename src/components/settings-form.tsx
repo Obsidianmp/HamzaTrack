@@ -19,6 +19,9 @@ type SettingsResponse = {
     role: "admin" | "contractor";
     timezone: string;
   }>;
+  appSettings?: {
+    billingTimezone?: string;
+  };
 };
 
 export function SettingsForm() {
@@ -27,6 +30,7 @@ export function SettingsForm() {
   const [currency, setCurrency] = useState("USD");
   const [contractorTimezone, setContractorTimezone] = useState("UTC");
   const [adminTimezone, setAdminTimezone] = useState("UTC");
+  const [billingTimezone, setBillingTimezone] = useState("America/New_York");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
@@ -40,6 +44,7 @@ export function SettingsForm() {
         setContractorTimezone(response.contractor.timezone);
         const admin = response.users.find((user) => user.role === "admin");
         setAdminTimezone(admin?.timezone ?? "UTC");
+        setBillingTimezone(response.appSettings?.billingTimezone ?? "America/New_York");
       })
       .catch((err) => setError(err.message));
   }, []);
@@ -107,6 +112,10 @@ export function SettingsForm() {
 
         <div className="grid-2">
           <div className="field">
+            <label htmlFor="billingTimezone">Billing Timezone (fixed)</label>
+            <input id="billingTimezone" className="input" value={billingTimezone} readOnly />
+          </div>
+          <div className="field">
             <label htmlFor="contractorTimezone">Contractor Timezone (IANA)</label>
             <input
               id="contractorTimezone"
@@ -133,6 +142,9 @@ export function SettingsForm() {
 
         <div className="warning-banner" style={{ fontSize: 13 }}>
           Rate changes apply to new entries going forward only. Existing entries keep their stored rate snapshot and billable amount.
+        </div>
+        <div className="warning-banner" style={{ fontSize: 13 }}>
+          Changing user timezones only changes display/report views in &quot;Display TZ&quot; mode. Stored timestamps remain in UTC, so historical data is not rewritten.
         </div>
 
         {error ? <div className="error">{error}</div> : null}

@@ -10,7 +10,7 @@
     {
       "id": "contractor-1",
       "email": "contractor@example.com",
-      "name": "Overseas Contractor",
+      "name": "Contractor",
       "role": "contractor",
       "timezone": "Asia/Manila"
     }
@@ -25,7 +25,8 @@
     }
   ],
   "appSettings": {
-    "defaultContractorUserId": "contractor-1"
+    "defaultContractorUserId": "contractor-1",
+    "billingTimezone": "America/New_York"
   },
   "activeTimers": [],
   "timeEntries": [],

@@ -18,18 +18,43 @@ export async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-export function dashboardUrl(preset: PeriodPreset, timezone?: string, day?: string) {
+export function dashboardUrl(
+  preset: PeriodPreset,
+  timezone?: string,
+  day?: string,
+  timezoneMode?: "billing" | "display"
+) {
   const params = new URLSearchParams({ preset });
   if (timezone) params.set("timezone", timezone);
   if (day) params.set("day", day);
+  if (timezoneMode) params.set("timezoneMode", timezoneMode);
   return `/api/dashboard?${params.toString()}`;
 }
 
-export function reportUrl(preset: PeriodPreset, timezone?: string, day?: string) {
+export function reportUrl(
+  preset: PeriodPreset,
+  timezone?: string,
+  day?: string,
+  timezoneMode?: "billing" | "display"
+) {
   const params = new URLSearchParams({ preset });
   if (timezone) params.set("timezone", timezone);
   if (day) params.set("day", day);
+  if (timezoneMode) params.set("timezoneMode", timezoneMode);
   return `/api/reports?${params.toString()}`;
+}
+
+export function reportPdfUrl(
+  preset: PeriodPreset,
+  timezone?: string,
+  day?: string,
+  timezoneMode?: "billing" | "display"
+) {
+  const params = new URLSearchParams({ preset });
+  if (timezone) params.set("timezone", timezone);
+  if (day) params.set("day", day);
+  if (timezoneMode) params.set("timezoneMode", timezoneMode);
+  return `/api/reports/pdf?${params.toString()}`;
 }
 
 export type SessionResponse = {
