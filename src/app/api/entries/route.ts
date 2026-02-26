@@ -12,6 +12,7 @@ export async function POST(request: Request) {
       startAtUtc?: string;
       endAtUtc?: string;
       notes?: string;
+      amount?: number;
     };
     const entry = await createManualEntry(user, payload);
     return NextResponse.json({ ok: true, entry });

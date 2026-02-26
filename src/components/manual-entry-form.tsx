@@ -29,6 +29,7 @@ export function ManualEntryForm({
   const [startLocal, setStartLocal] = useState(() => toLocalInputValue(defaultStart));
   const [endLocal, setEndLocal] = useState(() => toLocalInputValue(defaultEnd));
   const [notes, setNotes] = useState("");
+  const [billableAmount, setBillableAmount] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -41,10 +42,21 @@ export function ManualEntryForm({
     return { minutes, amount };
   }, [endLocal, hourlyRate, startLocal]);
 
+  const parsedOverrideAmount = Number(billableAmount);
+  const hasAmountOverride = billableAmount.trim() !== "";
+  const effectiveAmount =
+    hasAmountOverride && Number.isFinite(parsedOverrideAmount) && parsedOverrideAmount >= 0
+      ? Math.round((parsedOverrideAmount + Number.EPSILON) * 100) / 100
+      : preview.amount;
+
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError("");
     setSuccess("");
+    if (hasAmountOverride && (!Number.isFinite(parsedOverrideAmount) || parsedOverrideAmount < 0)) {
+      setError("Billable amount override must be a non-negative number.");
+      return;
+    }
     setSaving(true);
     try {
       await getJson("/api/entries", {
@@ -52,10 +64,12 @@ export function ManualEntryForm({
         body: JSON.stringify({
           startAtUtc: new Date(startLocal).toISOString(),
           endAtUtc: new Date(endLocal).toISOString(),
-          notes
+          notes,
+          amount: hasAmountOverride ? effectiveAmount : undefined
         })
       });
       setSuccess("Manual entry added.");
+      setBillableAmount("");
       await onCreated();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create entry");
@@ -112,9 +126,26 @@ export function ManualEntryForm({
         />
       </div>
 
+      <div className="field">
+        <label htmlFor="manual-billable">Billable Amount Override (optional)</label>
+        <input
+          id="manual-billable"
+          className="input"
+          type="number"
+          min="0"
+          step="0.01"
+          value={billableAmount}
+          onChange={(e) => setBillableAmount(e.target.value)}
+          placeholder={`Auto from rate (${formatCurrency(preview.amount, currency)})`}
+        />
+      </div>
+
       <div className="row">
         <span className="pill">Preview: {preview.minutes} min</span>
-        <span className="pill">Billable: {formatCurrency(preview.amount, currency)}</span>
+        <span className="pill">
+          Billable: {formatCurrency(effectiveAmount, currency)}
+          {hasAmountOverride ? " (override)" : ""}
+        </span>
       </div>
 
       {error ? <div className="error">{error}</div> : null}

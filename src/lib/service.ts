@@ -282,7 +282,7 @@ export async function updateEntry(
 
 export async function createManualEntry(
   currentUser: User,
-  payload: { startAtUtc?: string; endAtUtc?: string; notes?: string }
+  payload: { startAtUtc?: string; endAtUtc?: string; notes?: string; amount?: number }
 ) {
   if (currentUser.role !== "admin") {
     throw new Error("Only admin can create manual entries");
@@ -318,12 +318,17 @@ export async function createManualEntry(
 
     const nowUtc = nowUtcIso();
     const billing = applyContractToEntryDraft(contract, startAtUtc, endAtUtc);
+    const overrideAmount =
+      typeof payload.amount === "number" && Number.isFinite(payload.amount)
+        ? Math.max(0, Math.round((payload.amount + Number.EPSILON) * 100) / 100)
+        : undefined;
     const entry: TimeEntry = {
       id: createId("entry"),
       userId: contractor.id,
       startAtUtc,
       endAtUtc,
       ...billing,
+      amount: overrideAmount ?? billing.amount,
       notes: payload.notes?.trim() ?? "",
       source: "manual",
       edited: false,
@@ -343,7 +348,8 @@ export async function createManualEntry(
         startAtUtc,
         endAtUtc,
         durationMinutes: entry.durationMinutes,
-        amount: entry.amount
+        amount: entry.amount,
+        amountOverride: overrideAmount ?? null
       }
     });
 

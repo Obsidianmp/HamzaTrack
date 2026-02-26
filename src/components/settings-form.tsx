@@ -131,6 +131,10 @@ export function SettingsForm() {
           </div>
         </div>
 
+        <div className="warning-banner" style={{ fontSize: 13 }}>
+          Rate changes apply to new entries going forward only. Existing entries keep their stored rate snapshot and billable amount.
+        </div>
+
         {error ? <div className="error">{error}</div> : null}
         {message ? <div className="success">{message}</div> : null}
 
