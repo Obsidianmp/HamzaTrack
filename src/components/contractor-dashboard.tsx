@@ -11,6 +11,8 @@ import { EntriesTable } from "@/components/entries-table";
 
 export function ContractorDashboard() {
   const [preset, setPreset] = useState<PeriodPreset>("mtd");
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyDay, setHistoryDay] = useState("");
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [error, setError] = useState("");
   const [busy, startTransition] = useTransition();
@@ -19,9 +21,9 @@ export function ContractorDashboard() {
 
   const timezone = data?.contractor.timezone ?? "UTC";
 
-  async function refreshDashboard(nextPreset = preset) {
+  async function refreshDashboard(nextPreset = preset, nextHistoryDay = historyDay || undefined) {
     setError("");
-    const response = await getJson<DashboardResponse>(dashboardUrl(nextPreset));
+    const response = await getJson<DashboardResponse>(dashboardUrl(nextPreset, undefined, nextHistoryDay));
     setData(response);
   }
 
@@ -29,7 +31,9 @@ export function ContractorDashboard() {
     let active = true;
     const pull = async () => {
       try {
-        const response = await getJson<DashboardResponse>(dashboardUrl(preset));
+        const response = await getJson<DashboardResponse>(
+          dashboardUrl(preset, undefined, historyDay || undefined)
+        );
         if (!active) return;
         setError("");
         setData(response);
@@ -47,7 +51,7 @@ export function ContractorDashboard() {
       active = false;
       clearInterval(poll);
     };
-  }, [preset]);
+  }, [preset, historyDay]);
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
@@ -98,13 +102,14 @@ export function ContractorDashboard() {
             <PeriodTabs
               value={preset}
               onChange={(next) => {
+                setHistoryDay("");
                 setPreset(next);
               }}
             />
             <button
               type="button"
               className="btn"
-              onClick={() => window.location.assign(reportUrl(preset))}
+              onClick={() => window.location.assign(reportUrl(preset, undefined, historyDay || undefined))}
               disabled={!data}
             >
               Download Report
@@ -174,9 +179,46 @@ export function ContractorDashboard() {
             <h2 className="subheading">Time Log</h2>
             <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
               Period timezone: {timezone}
+              {data?.range.selectedDay ? ` | History day: ${data.range.selectedDay}` : ""}
             </div>
           </div>
+          <div className="row">
+            <button type="button" className="btn" onClick={() => setShowHistory((v) => !v)}>
+              {showHistory ? "Close History" : "History"}
+            </button>
+            {data?.range.selectedDay ? (
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setHistoryDay("");
+                  setPreset("mtd");
+                }}
+              >
+                Back to MTD
+              </button>
+            ) : null}
+          </div>
         </div>
+        {showHistory ? (
+          <div className="history-controls">
+            <div className="field">
+              <label htmlFor="contractor-history-day">Select Day</label>
+              <input
+                id="contractor-history-day"
+                type="date"
+                className="input"
+                value={historyDay}
+                onChange={(e) => setHistoryDay(e.target.value)}
+              />
+            </div>
+            <div className="row">
+              <button type="button" className="btn" disabled={!historyDay} onClick={() => setPreset("daily")}>
+                View Day
+              </button>
+            </div>
+          </div>
+        ) : null}
         {data ? (
           <EntriesTable
             entries={data.entries}

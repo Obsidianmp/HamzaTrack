@@ -75,7 +75,7 @@ export function ManualEntryForm({
         </div>
       </div>
 
-      <div className="grid-2">
+      <div className="stack">
         <div className="field">
           <label htmlFor="manual-start">Start (your local time)</label>
           <input

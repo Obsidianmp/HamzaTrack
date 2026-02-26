@@ -49,6 +49,7 @@ export interface TimeEntry {
   notes?: string;
   source: string;
   edited: boolean;
+  lastEditedByRole?: Role;
   createdAtUtc: string;
   updatedAtUtc: string;
 }
@@ -116,7 +117,7 @@ export interface DashboardResponse {
   contractor: User;
   contract: Contract;
   activeTimer: ActiveTimer | null;
-  range: DateRange & { preset: PeriodPreset; timezone: string };
+  range: DateRange & { preset: PeriodPreset; timezone: string; selectedDay?: string | null };
   totals: ReportTotals;
   entries: TimeEntry[];
   auditLogs: AuditLog[];

@@ -17,7 +17,8 @@ export async function GET(request: Request) {
     const presetParam = (url.searchParams.get("preset") ?? "mtd") as PeriodPreset;
     const preset = VALID_PRESETS.has(presetParam) ? presetParam : "mtd";
     const timezone = url.searchParams.get("timezone");
-    const data = await loadDashboard(user, preset, timezone);
+    const day = url.searchParams.get("day");
+    const data = await loadDashboard(user, preset, timezone, day);
     const csv = dashboardReportToCsv(data);
 
     const filename = `hamzatrack-report-${preset}-${new Date().toISOString().slice(0, 10)}.csv`;

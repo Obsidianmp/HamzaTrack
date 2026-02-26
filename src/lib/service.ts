@@ -16,6 +16,7 @@ import {
   buildTotalsForRange,
   clampRange,
   filterEntriesByRange,
+  getSpecificDayRange,
   getPresetRange,
   safeTimezone
 } from "@/lib/time";
@@ -62,7 +63,8 @@ function hasOverlappingEntry(
 export async function loadDashboard(
   currentUser: User,
   preset: PeriodPreset,
-  requestedTimezone?: string | null
+  requestedTimezone?: string | null,
+  selectedDay?: string | null
 ): Promise<DashboardResponse> {
   const db = await readDb();
   const contractor = getDefaultContractor(db);
@@ -74,7 +76,10 @@ export async function loadDashboard(
       ? db.timeEntries.filter((entry) => entry.userId === contractor.id)
       : db.timeEntries.filter((entry) => entry.userId === currentUser.id);
 
-  const range = clampRange(getPresetRange(preset, timezone));
+  const effectivePreset = selectedDay ? "daily" : preset;
+  const range = clampRange(
+    selectedDay ? getSpecificDayRange(selectedDay, timezone) : getPresetRange(effectivePreset, timezone)
+  );
   const inRangeEntries = sortEntriesDesc(filterEntriesByRange(baseEntries, range));
   const totals = buildTotalsForRange(baseEntries, range);
   const monthlyBuckets = buildMonthlyBuckets(baseEntries, timezone, 6);
@@ -92,8 +97,9 @@ export async function loadDashboard(
     activeTimer,
     range: {
       ...range,
-      preset,
-      timezone
+      preset: effectivePreset,
+      timezone,
+      selectedDay: selectedDay ?? null
     },
     totals,
     entries: inRangeEntries,
@@ -177,6 +183,7 @@ export async function stopTimer(currentUser: User) {
       notes: "",
       source: "timer",
       edited: false,
+      lastEditedByRole: undefined,
       createdAtUtc: endAtUtc,
       updatedAtUtc: endAtUtc
     };
@@ -254,6 +261,7 @@ export async function updateEntry(
         ? Math.max(0, Math.round((payload.amount + Number.EPSILON) * 100) / 100)
         : calculatedAmount;
     entry.edited = true;
+    entry.lastEditedByRole = currentUser.role;
     entry.updatedAtUtc = nowUtcIso();
 
     appendAuditLog(db, {
@@ -319,6 +327,7 @@ export async function createManualEntry(
       notes: payload.notes?.trim() ?? "",
       source: "manual",
       edited: false,
+      lastEditedByRole: undefined,
       createdAtUtc: nowUtc,
       updatedAtUtc: nowUtc
     };

@@ -24,12 +24,14 @@ function downloadTextFile(filename: string, content: string) {
 
 export function AdminDashboard() {
   const [preset, setPreset] = useState<PeriodPreset>("mtd");
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyDay, setHistoryDay] = useState("");
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  async function refreshDashboard(nextPreset = preset) {
-    const response = await getJson<DashboardResponse>(dashboardUrl(nextPreset));
+  async function refreshDashboard(nextPreset = preset, nextHistoryDay = historyDay || undefined) {
+    const response = await getJson<DashboardResponse>(dashboardUrl(nextPreset, undefined, nextHistoryDay));
     setData(response);
   }
 
@@ -37,7 +39,9 @@ export function AdminDashboard() {
     let active = true;
     const pull = async () => {
       try {
-        const response = await getJson<DashboardResponse>(dashboardUrl(preset));
+        const response = await getJson<DashboardResponse>(
+          dashboardUrl(preset, undefined, historyDay || undefined)
+        );
         if (!active) return;
         setError("");
         setData(response);
@@ -55,7 +59,7 @@ export function AdminDashboard() {
       active = false;
       clearInterval(poll);
     };
-  }, [preset]);
+  }, [preset, historyDay]);
 
   const currency = data?.contract.currency ?? "USD";
   const actorUsers = useMemo(() => {
@@ -103,8 +107,19 @@ export function AdminDashboard() {
             </p>
           </div>
           <div className="toolbar-actions">
-            <PeriodTabs value={preset} onChange={setPreset} />
-            <button className="btn" type="button" onClick={() => window.location.assign(reportUrl(preset))} disabled={!data}>
+            <PeriodTabs
+              value={preset}
+              onChange={(next) => {
+                setHistoryDay("");
+                setPreset(next);
+              }}
+            />
+            <button
+              className="btn"
+              type="button"
+              onClick={() => window.location.assign(reportUrl(preset, undefined, historyDay || undefined))}
+              disabled={!data}
+            >
               Download Report
             </button>
             <button className="btn" type="button" onClick={exportCsv} disabled={!data}>
@@ -144,10 +159,47 @@ export function AdminDashboard() {
               <h2 className="subheading">Time Entries</h2>
               <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
                 Contractor timezone: {data?.contractor.timezone ?? "UTC"} | Range preset: {preset.toUpperCase()}
+                {data?.range.selectedDay ? ` | History day: ${data.range.selectedDay}` : ""}
               </div>
             </div>
-            {data?.activeTimer ? <span className="pill warn">Timer running</span> : <span className="pill">Timer stopped</span>}
+            <div className="row">
+              {data?.activeTimer ? <span className="pill warn">Timer running</span> : <span className="pill">Timer stopped</span>}
+              <button type="button" className="btn" onClick={() => setShowHistory((v) => !v)}>
+                {showHistory ? "Close History" : "History"}
+              </button>
+              {data?.range.selectedDay ? (
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => {
+                    setHistoryDay("");
+                    setPreset("mtd");
+                  }}
+                >
+                  Back to MTD
+                </button>
+              ) : null}
+            </div>
           </div>
+          {showHistory ? (
+            <div className="history-controls">
+              <div className="field">
+                <label htmlFor="admin-history-day">Select Day</label>
+                <input
+                  id="admin-history-day"
+                  type="date"
+                  className="input"
+                  value={historyDay}
+                  onChange={(e) => setHistoryDay(e.target.value)}
+                />
+              </div>
+              <div className="row">
+                <button type="button" className="btn" disabled={!historyDay} onClick={() => setPreset("daily")}>
+                  View Day
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           {data ? (
             <EntriesTable

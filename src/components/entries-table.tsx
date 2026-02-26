@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 
-import { formatCurrency, formatDateTime } from "@/lib/format";
+import { formatCurrency, formatDateOnly, formatDateTime } from "@/lib/format";
+import { getZonedParts, zonedDateTimeToUtc } from "@/lib/time";
 import type { TimeEntry } from "@/types/time-tracker";
 
 type EditDraft = {
@@ -21,6 +22,32 @@ function toLocalInputValue(iso: string) {
 
 function localInputToIso(localValue: string) {
   return new Date(localValue).toISOString();
+}
+
+function getWeekInfo(iso: string, timezone: string) {
+  const date = new Date(iso);
+  const parts = getZonedParts(date, timezone);
+  const weekdayOrder: Record<string, number> = {
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6
+  };
+  const current = weekdayOrder[parts.weekdayShort] ?? 1;
+  const diffFromMonday = (current + 6) % 7;
+  const monday = new Date(Date.UTC(parts.year, parts.month - 1, parts.day - diffFromMonday, 12, 0, 0));
+  const mondayY = monday.getUTCFullYear();
+  const mondayM = monday.getUTCMonth() + 1;
+  const mondayD = monday.getUTCDate();
+  const weekKey = `${mondayY}-${String(mondayM).padStart(2, "0")}-${String(mondayD).padStart(2, "0")}`;
+  const mondayUtc = zonedDateTimeToUtc(timezone, { year: mondayY, month: mondayM, day: mondayD });
+  return {
+    weekKey,
+    weekLabel: `Week of ${formatDateOnly(mondayUtc.toISOString(), timezone)}`
+  };
 }
 
 export function EntriesTable({
@@ -44,6 +71,22 @@ export function EntriesTable({
   const [error, setError] = useState("");
 
   const entryMap = useMemo(() => new Map(entries.map((entry) => [entry.id, entry])), [entries]);
+  const rows = useMemo(() => {
+    const output: Array<
+      | { type: "week"; weekKey: string; label: string }
+      | { type: "entry"; entry: TimeEntry }
+    > = [];
+    let currentWeekKey: string | null = null;
+    for (const entry of entries) {
+      const week = getWeekInfo(entry.startAtUtc, timezone);
+      if (week.weekKey !== currentWeekKey) {
+        currentWeekKey = week.weekKey;
+        output.push({ type: "week", weekKey: week.weekKey, label: week.weekLabel });
+      }
+      output.push({ type: "entry", entry });
+    }
+    return output;
+  }, [entries, timezone]);
 
   function startEdit(entry: TimeEntry) {
     setError("");
@@ -106,8 +149,20 @@ export function EntriesTable({
                 </td>
               </tr>
             ) : null}
-            {entries.map((entry) => {
+            {rows.map((row) => {
+              if (row.type === "week") {
+                return (
+                  <tr key={`week-${row.weekKey}`} className="week-index-row">
+                    <td colSpan={editable ? 9 : 8} className="week-index-cell">
+                      {row.label}
+                    </td>
+                  </tr>
+                );
+              }
+              const entry = row.entry;
               const isEditing = entry.id === editingId && draft;
+              const contractorEdited = entry.lastEditedByRole === "contractor";
+              const timeCellClass = contractorEdited ? "contractor-edited-text" : undefined;
               return (
                 <tr key={entry.id}>
                   <td>
@@ -120,7 +175,7 @@ export function EntriesTable({
                         onChange={(e) => setDraft({ ...draft, startLocal: e.target.value })}
                       />
                     ) : (
-                      formatDateTime(entry.startAtUtc, timezone)
+                      <span className={timeCellClass}>{formatDateTime(entry.startAtUtc, timezone)}</span>
                     )}
                   </td>
                   <td>
@@ -133,10 +188,12 @@ export function EntriesTable({
                         onChange={(e) => setDraft({ ...draft, endLocal: e.target.value })}
                       />
                     ) : (
-                      formatDateTime(entry.endAtUtc, timezone)
+                      <span className={timeCellClass}>{formatDateTime(entry.endAtUtc, timezone)}</span>
                     )}
                   </td>
-                  <td>{entry.durationMinutes}</td>
+                  <td>
+                    <span className={timeCellClass}>{entry.durationMinutes}</span>
+                  </td>
                   <td>
                     {formatCurrency(entry.rateSnapshot, currency).replace(/\.00$/, "")}/hr
                   </td>
@@ -170,7 +227,13 @@ export function EntriesTable({
                     <span className="pill">{entry.source === "manual" ? "manual" : "timer"}</span>
                   </td>
                   <td>
-                    {entry.edited ? <span className="pill warn">Edited</span> : <span className="pill">Saved</span>}
+                    {entry.edited ? (
+                      <span className={`pill warn ${contractorEdited ? "contractor-edited-pill" : ""}`}>
+                        {contractorEdited ? "Edited by contractor" : "Edited"}
+                      </span>
+                    ) : (
+                      <span className="pill">Saved</span>
+                    )}
                   </td>
                   {editable ? (
                     <td>

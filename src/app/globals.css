@@ -136,6 +136,45 @@ html[data-theme="dark"] .warning-banner {
   color: #fed7aa;
 }
 
+.history-controls {
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.75rem;
+  background: color-mix(in srgb, var(--panel-solid) 85%, var(--bg-2));
+}
+
+.week-index-row td {
+  background: color-mix(in srgb, var(--table-head) 82%, var(--panel-solid));
+  border-bottom: 1px solid var(--line);
+}
+
+.week-index-cell {
+  font-size: 0.82rem;
+  color: var(--muted);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.contractor-edited-text {
+  color: #c2410c;
+  font-weight: 600;
+}
+
+html[data-theme="dark"] .contractor-edited-text {
+  color: #fdba74;
+}
+
+.contractor-edited-pill {
+  border-color: #fdba74;
+  color: #c2410c;
+}
+
+html[data-theme="dark"] .contractor-edited-pill {
+  color: #fdba74;
+}
+
 .muted {
   color: var(--muted);
 }
@@ -527,6 +566,10 @@ tbody tr:hover {
   .toolbar-actions .tabs {
     width: 100%;
     overflow-x: auto;
+  }
+
+  .history-controls {
+    grid-template-columns: 1fr;
   }
 
   .timer-box .row.spread {

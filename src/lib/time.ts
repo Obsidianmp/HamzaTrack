@@ -154,6 +154,23 @@ export function getPresetRange(preset: PeriodPreset, timezone: string, now = new
   };
 }
 
+export function getSpecificDayRange(dayKey: string, timezone: string): DateRange {
+  const match = dayKey.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) {
+    throw new Error("Invalid day format. Expected YYYY-MM-DD");
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const start = zonedDateTimeToUtc(timezone, { year, month, day, hour: 0, minute: 0, second: 0 });
+  const next = addDaysYmd(year, month, day, 1);
+  const end = zonedDateTimeToUtc(timezone, { ...next, hour: 0, minute: 0, second: 0 });
+  return {
+    startUtc: start.toISOString(),
+    endUtc: end.toISOString()
+  };
+}
+
 export function clampRange(range: DateRange) {
   const startMs = new Date(range.startUtc).getTime();
   const endMs = new Date(range.endUtc).getTime();

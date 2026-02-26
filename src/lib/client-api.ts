@@ -18,15 +18,17 @@ export async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-export function dashboardUrl(preset: PeriodPreset, timezone?: string) {
+export function dashboardUrl(preset: PeriodPreset, timezone?: string, day?: string) {
   const params = new URLSearchParams({ preset });
   if (timezone) params.set("timezone", timezone);
+  if (day) params.set("day", day);
   return `/api/dashboard?${params.toString()}`;
 }
 
-export function reportUrl(preset: PeriodPreset, timezone?: string) {
+export function reportUrl(preset: PeriodPreset, timezone?: string, day?: string) {
   const params = new URLSearchParams({ preset });
   if (timezone) params.set("timezone", timezone);
+  if (day) params.set("day", day);
   return `/api/reports?${params.toString()}`;
 }
 
